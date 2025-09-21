@@ -207,6 +207,45 @@ header p {
   display: block;
 }
 
+.pan-document-summary {
+  display: grid;
+  gap: 0.5rem;
+}
+
+.pan-document-name {
+  font-weight: 600;
+  color: var(--text-secondary);
+}
+
+.pan-preview {
+  border: 1px solid var(--border);
+  background: var(--surface-muted);
+  padding: 0.75rem;
+  display: grid;
+  place-items: center;
+}
+
+.pan-preview img {
+  width: 100%;
+  max-width: 360px;
+  border: 1px solid var(--border);
+  background: #ffffff;
+  box-shadow: 0 8px 18px rgba(27, 35, 51, 0.12);
+}
+
+.pan-preview-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  font-weight: 600;
+  color: var(--primary);
+  text-decoration: none;
+}
+
+.pan-preview-link:hover {
+  text-decoration: underline;
+}
+
 .session-summary code {
   display: inline-block;
   padding: 0.35rem 0.6rem;

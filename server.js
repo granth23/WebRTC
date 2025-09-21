@@ -13,6 +13,7 @@ const waitingUsers = new Map();
 const employees = new Set();
 const roomMetadata = new Map();
 let clientCounter = 1;
+const MAX_INLINE_DOCUMENT_LENGTH = 4_500_000;
 
 const server = http.createServer((req, res) => {
   if (!fs.existsSync(CLIENT_INDEX_FILE)) {
@@ -570,6 +571,22 @@ function sanitizeSessionDetails(value) {
       .slice(0, 320);
     if (address) {
       details.address = address;
+    }
+  }
+  if (typeof value.panFrontName === 'string') {
+    const documentName = value.panFrontName.replace(/\s+/g, ' ').trim().slice(0, 120);
+    if (documentName) {
+      details.panFrontName = documentName;
+    }
+  }
+  if (typeof value.panFrontImage === 'string') {
+    const imageData = value.panFrontImage.trim();
+    if (
+      imageData &&
+      imageData.length <= MAX_INLINE_DOCUMENT_LENGTH &&
+      /^data:(image\/[a-z0-9.+-]+|application\/pdf);base64,/i.test(imageData)
+    ) {
+      details.panFrontImage = imageData;
     }
   }
 

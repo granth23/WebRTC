@@ -7,6 +7,8 @@ const DEFAULT_SIGNALING_PATH = import.meta.env.VITE_SIGNALING_PATH ?? '/ws';
 const PAN_REGEX = /\b([A-Z]{5}[0-9]{4}[A-Z])\b/;
 const DOB_REGEX = /\b(\d{1,2}[./-]\d{1,2}[./-]\d{2,4})\b/;
 const INVALID_NAME_CHARS = /[^A-Z0-9\s./-]/g;
+const MAX_INLINE_DOCUMENT_BYTES = 3 * 1024 * 1024; // 3 MB
+const MAX_INLINE_DOCUMENT_LENGTH = 4_500_000; // Allow base64 preview up to ~3 MB
 
 const STEPS = [
   {
@@ -253,6 +255,12 @@ function App() {
     panFront: null
   });
 
+  const [panPreview, setPanPreview] = useState({
+    status: 'idle',
+    url: '',
+    error: ''
+  });
+
   const [panDetails, setPanDetails] = useState({
     panNumber: '',
     name: '',
@@ -281,6 +289,7 @@ function App() {
   const pendingCandidatesRef = useRef([]);
   const manualCloseRef = useRef(false);
   const panExtractionJobRef = useRef(0);
+  const panPreviewJobRef = useRef(0);
   const finalizedRef = useRef(false);
 
   useEffect(() => {
@@ -661,6 +670,12 @@ function App() {
       if (address) {
         details.address = address;
       }
+      if (documents.panFront?.name) {
+        details.panFrontName = documents.panFront.name.slice(0, 120);
+      }
+      if (panPreview.status === 'ready' && panPreview.url && panPreview.url.length <= MAX_INLINE_DOCUMENT_LENGTH) {
+        details.panFrontImage = panPreview.url;
+      }
       socket.send(
         JSON.stringify({
           type: 'register-user',
@@ -810,6 +825,14 @@ function App() {
       setWizardError('Please upload the front of your PAN card.');
       return;
     }
+    if (panPreview.status === 'loading') {
+      setWizardError('Please wait for the PAN card preview to finish processing.');
+      return;
+    }
+    if (panPreview.status === 'error') {
+      setWizardError(panPreview.error || 'Please upload a valid PAN card image.');
+      return;
+    }
     const sanitisedPan = sanitizePanNumber(panDetails.panNumber);
     if (!isValidPanNumber(sanitisedPan)) {
       setWizardError('Enter a valid 10-character PAN card number.');
@@ -836,12 +859,74 @@ function App() {
       [field]: file || null
     }));
     setWizardError('');
+
     if (field === 'panFront') {
       if (file) {
+        if (file.size > MAX_INLINE_DOCUMENT_BYTES) {
+          panPreviewJobRef.current += 1;
+          setPanPreview({
+            status: 'error',
+            url: '',
+            error: 'The PAN card image must be 3 MB or smaller to preview and share automatically.'
+          });
+          setWizardError('The PAN card image must be 3 MB or smaller.');
+        } else {
+          const previewJobId = panPreviewJobRef.current + 1;
+          panPreviewJobRef.current = previewJobId;
+          setPanPreview({ status: 'loading', url: '', error: '' });
+          const reader = new FileReader();
+          reader.onload = () => {
+            if (panPreviewJobRef.current !== previewJobId) {
+              return;
+            }
+            const result = typeof reader.result === 'string' ? reader.result : '';
+            if (!result) {
+              setPanPreview({
+                status: 'error',
+                url: '',
+                error: 'Unable to preview the selected file. Try uploading a different image.'
+              });
+              return;
+            }
+            if (result.length > MAX_INLINE_DOCUMENT_LENGTH) {
+              setPanPreview({
+                status: 'error',
+                url: '',
+                error: 'The selected file is too large to share automatically. Choose a smaller image.'
+              });
+              setWizardError('Please upload a smaller PAN card image to continue.');
+              return;
+            }
+            setPanPreview({ status: 'ready', url: result, error: '' });
+          };
+          reader.onerror = () => {
+            if (panPreviewJobRef.current !== previewJobId) {
+              return;
+            }
+            setPanPreview({
+              status: 'error',
+              url: '',
+              error: 'Could not read the selected file. Try again with a clearer image.'
+            });
+          };
+          try {
+            reader.readAsDataURL(file);
+          } catch (err) {
+            console.error('Preview failed', err);
+            setPanPreview({
+              status: 'error',
+              url: '',
+              error: 'Could not generate a preview for this file.'
+            });
+          }
+        }
+
         const jobId = panExtractionJobRef.current + 1;
         panExtractionJobRef.current = jobId;
         extractPanDetails(file, jobId);
       } else {
+        panPreviewJobRef.current += 1;
+        setPanPreview({ status: 'idle', url: '', error: '' });
         panExtractionJobRef.current += 1;
         setPanExtraction({ status: 'idle', message: '' });
         setPanDetails((prev) => ({
@@ -1123,6 +1208,32 @@ function App() {
               onChange={(event) => handleDocumentChange('panFront', event.target.files)}
             />
             {documents.panFront && <p className="document-pill">{documents.panFront.name}</p>}
+            {documents.panFront && (
+              <div className="pan-preview-section" aria-live="polite">
+                {panPreview.status === 'loading' && (
+                  <p className="pan-preview-message loading">Preparing a preview of your document…</p>
+                )}
+                {panPreview.status === 'error' && (
+                  <p className="pan-preview-message error">{panPreview.error}</p>
+                )}
+                {panPreview.status === 'ready' && panPreview.url && (
+                  documents.panFront.type?.startsWith('image/') ? (
+                    <figure className="pan-preview-frame">
+                      <img src={panPreview.url} alt="Preview of the uploaded PAN card" />
+                    </figure>
+                  ) : (
+                    <a
+                      className="pan-preview-link"
+                      href={panPreview.url}
+                      target="_blank"
+                      rel="noreferrer"
+                    >
+                      Open the uploaded PAN document in a new tab
+                    </a>
+                  )
+                )}
+              </div>
+            )}
 
             <label htmlFor="pan-number">PAN card number</label>
             <input
@@ -1253,6 +1364,32 @@ function App() {
                         {documents.panFront ? `PAN front — ${documents.panFront.name}` : 'PAN front pending'}
                       </span>
                     </div>
+                    {documents.panFront && (
+                      <div className="document-preview" aria-live="polite">
+                        {panPreview.status === 'loading' && (
+                          <p className="document-note loading">Preparing a preview of your PAN card…</p>
+                        )}
+                        {panPreview.status === 'error' && (
+                          <p className="document-note error">{panPreview.error}</p>
+                        )}
+                        {panPreview.status === 'ready' && panPreview.url && (
+                          documents.panFront.type?.startsWith('image/') ? (
+                            <figure className="document-preview-frame">
+                              <img src={panPreview.url} alt="Preview of the uploaded PAN card" />
+                            </figure>
+                          ) : (
+                            <a
+                              className="document-preview-link"
+                              href={panPreview.url}
+                              target="_blank"
+                              rel="noreferrer"
+                            >
+                              Open the uploaded PAN document in a new tab
+                            </a>
+                          )
+                        )}
+                      </div>
+                    )}
                     {panExtraction.status === 'loading' && (
                       <p className="document-note loading">{panExtraction.message}</p>
                     )}

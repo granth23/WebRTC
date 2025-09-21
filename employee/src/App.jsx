@@ -507,6 +507,33 @@ function App() {
                     <span className="address-value">{sessionDetails.address}</span>
                   </div>
                 )}
+                {(sessionDetails?.panFrontName || sessionDetails?.panFrontImage) && (
+                  <div className="pan-document-summary">
+                    <span className="label">PAN document</span>
+                    {sessionDetails?.panFrontName && (
+                      <span className="pan-document-name">{sessionDetails.panFrontName}</span>
+                    )}
+                    {sessionDetails?.panFrontImage && (
+                      sessionDetails.panFrontImage.startsWith('data:image/') ? (
+                        <div className="pan-preview">
+                          <img
+                            src={sessionDetails.panFrontImage}
+                            alt={`PAN card uploaded by ${selectedUser ? selectedUser.name : 'the customer'}`}
+                          />
+                        </div>
+                      ) : (
+                        <a
+                          className="pan-preview-link"
+                          href={sessionDetails.panFrontImage}
+                          target="_blank"
+                          rel="noreferrer"
+                        >
+                          Open PAN document in a new tab
+                        </a>
+                      )
+                    )}
+                  </div>
+                )}
               </div>
             ) : (
               <p className="empty">Select a customer from the queue to view their details.</p>

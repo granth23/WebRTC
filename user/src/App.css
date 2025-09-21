@@ -493,6 +493,68 @@ header p {
   color: var(--text-muted);
 }
 
+.pan-preview-section {
+  margin-top: 0.75rem;
+  display: grid;
+  gap: 0.75rem;
+}
+
+.pan-preview-frame,
+.document-preview-frame {
+  border: 1px solid var(--border-strong);
+  background: var(--surface-muted);
+  padding: 0.75rem;
+  display: grid;
+  place-items: center;
+}
+
+.pan-preview-frame img,
+.document-preview-frame img {
+  width: 100%;
+  max-width: 420px;
+  border: 1px solid var(--border);
+  box-shadow: 0 8px 18px rgba(27, 35, 51, 0.12);
+  background: #ffffff;
+}
+
+.pan-preview-message {
+  margin: 0;
+  font-size: 0.86rem;
+  line-height: 1.45;
+}
+
+.pan-preview-message.loading {
+  color: var(--primary-strong);
+}
+
+.pan-preview-message.error {
+  color: var(--danger);
+  background: var(--danger-soft);
+  padding: 0.5rem 0.75rem;
+  border-left: 2px solid var(--danger);
+}
+
+.pan-preview-link,
+.document-preview-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  font-weight: 600;
+  color: var(--primary);
+  text-decoration: none;
+}
+
+.pan-preview-link:hover,
+.document-preview-link:hover {
+  text-decoration: underline;
+}
+
+.document-preview {
+  margin-top: 0.75rem;
+  display: grid;
+  gap: 0.6rem;
+}
+
 .pan-summary {
   margin-top: 0.75rem;
   padding: 1.35rem 1.45rem;
