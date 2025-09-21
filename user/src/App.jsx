@@ -3,6 +3,7 @@ import { useEffect, useRef, useState } from 'react';
 const INITIAL_STATUS = 'Complete the application steps to begin your verification session.';
 const READY_STATUS = 'Review your details and start the verification call when you are ready.';
 const DEFAULT_SIGNALING_PATH = import.meta.env.VITE_SIGNALING_PATH ?? '/ws';
+const DEFAULT_PAN_EXTRACTION_URL = 'http://localhost:5000/api/pan/extract';
 
 const STEPS = [
   {
@@ -40,11 +41,68 @@ function resolveSignalingUrl() {
   return `${protocol}://${window.location.host}${path}`;
 }
 
+function resolvePanExtractionUrl() {
+  const explicit = (import.meta.env.VITE_PAN_EXTRACTION_URL || '').trim();
+  return explicit.length > 0 ? explicit : DEFAULT_PAN_EXTRACTION_URL;
+}
+
 function sanitizeDisplayName(value) {
   if (typeof value !== 'string') {
     return '';
   }
   return value.replace(/\s+/g, ' ').trim();
+}
+
+function sanitizePanNumber(value) {
+  if (typeof value !== 'string') {
+    return '';
+  }
+  return value.toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 10);
+}
+
+function isValidPanNumber(value) {
+  return /^[A-Z]{5}\d{4}[A-Z]$/.test(value);
+}
+
+function formatPanName(value) {
+  if (!value) {
+    return '';
+  }
+  return value
+    .split(/\s+/)
+    .filter(Boolean)
+    .map((part) => part.charAt(0).toUpperCase() + part.slice(1).toLowerCase())
+    .join(' ');
+}
+
+function normalisePanDob(value) {
+  if (!value) {
+    return '';
+  }
+  const trimmed = value.trim();
+  if (/^\d{4}-\d{2}-\d{2}$/.test(trimmed)) {
+    return trimmed;
+  }
+  const normalized = trimmed.replace(/[.]/g, '/').replace(/-/g, '/');
+  const [day, month, year] = normalized.split('/');
+  if (day && month && year) {
+    const dd = Number.parseInt(day, 10);
+    const mm = Number.parseInt(month, 10);
+    let yyyy = Number.parseInt(year, 10);
+    if (Number.isFinite(dd) && Number.isFinite(mm) && Number.isFinite(yyyy)) {
+      if (yyyy < 100) {
+        const currentYear = new Date().getFullYear();
+        const currentCentury = Math.floor(currentYear / 100) * 100;
+        const candidate = currentCentury + yyyy;
+        yyyy = candidate > currentYear ? candidate - 100 : candidate;
+      }
+      const isoDate = new Date(Date.UTC(yyyy, mm - 1, dd));
+      if (!Number.isNaN(isoDate.getTime())) {
+        return isoDate.toISOString().slice(0, 10);
+      }
+    }
+  }
+  return trimmed;
 }
 
 function formatCurrency(value) {
@@ -94,8 +152,19 @@ function App() {
     income: ''
   });
   const [documents, setDocuments] = useState({
-    panFront: null,
-    panBack: null
+    panFront: null
+  });
+
+  const [panDetails, setPanDetails] = useState({
+    panNumber: '',
+    name: '',
+    fatherName: '',
+    dob: ''
+  });
+
+  const [panExtraction, setPanExtraction] = useState({
+    status: 'idle',
+    message: ''
   });
 
   const [status, setStatus] = useState(INITIAL_STATUS);
@@ -111,6 +180,7 @@ function App() {
   const localStreamRef = useRef(null);
   const pendingCandidatesRef = useRef([]);
   const manualCloseRef = useRef(false);
+  const panExtractionJobRef = useRef(0);
 
   useEffect(() => {
     const video = localVideoRef.current;
@@ -532,10 +602,20 @@ function App() {
 
   function handleDocumentSubmit(event) {
     event.preventDefault();
-    if (!documents.panFront || !documents.panBack) {
-      setWizardError('Please upload both the front and back of your PAN card.');
+    if (!documents.panFront) {
+      setWizardError('Please upload the front of your PAN card.');
       return;
     }
+    const sanitisedPan = sanitizePanNumber(panDetails.panNumber);
+    if (!isValidPanNumber(sanitisedPan)) {
+      setWizardError('Enter a valid 10-character PAN card number.');
+      return;
+    }
+
+    setPanDetails((prev) => ({
+      ...prev,
+      panNumber: sanitisedPan
+    }));
     setWizardError('');
     setStatus(READY_STATUS);
     setError('');
@@ -549,6 +629,104 @@ function App() {
       [field]: file || null
     }));
     setWizardError('');
+    if (field === 'panFront') {
+      if (file) {
+        const jobId = panExtractionJobRef.current + 1;
+        panExtractionJobRef.current = jobId;
+        extractPanDetails(file, jobId);
+      } else {
+        panExtractionJobRef.current += 1;
+        setPanExtraction({ status: 'idle', message: '' });
+        setPanDetails((prev) => ({
+          ...prev,
+          name: '',
+          fatherName: '',
+          dob: ''
+        }));
+      }
+    }
+  }
+
+  function handlePanNumberChange(event) {
+    const sanitised = sanitizePanNumber(event.target.value);
+    setPanDetails((prev) => ({
+      ...prev,
+      panNumber: sanitised
+    }));
+  }
+
+  async function extractPanDetails(file, jobId) {
+    setPanExtraction({ status: 'loading', message: 'Extracting PAN details…' });
+    const formData = new FormData();
+    formData.append('pan_front', file);
+
+    try {
+      const response = await fetch(resolvePanExtractionUrl(), {
+        method: 'POST',
+        body: formData
+      });
+
+      if (jobId !== panExtractionJobRef.current) {
+        return;
+      }
+
+      if (!response.ok) {
+        const text = await response.text();
+        throw new Error(text || 'PAN extraction failed.');
+      }
+
+      let payload = {};
+      try {
+        payload = await response.json();
+      } catch (parseError) {
+        throw new Error('PAN extraction service returned an unexpected response.');
+      }
+
+      if (payload.status === 'error') {
+        throw new Error(payload.message || 'PAN extraction failed.');
+      }
+
+      const extractedPan = sanitizePanNumber(payload.panNumber || payload.pan_number || '');
+      const extractedName = formatPanName(payload.name || payload.panName || payload.pan_name || '');
+      const extractedFather = formatPanName(
+        payload.fatherName || payload.father_name || payload.father || ''
+      );
+      const extractedDob = normalisePanDob(payload.dob || '');
+
+      if (jobId !== panExtractionJobRef.current) {
+        return;
+      }
+
+      setPanDetails((prev) => ({
+        panNumber: extractedPan || prev.panNumber,
+        name: extractedName || prev.name,
+        fatherName: extractedFather || prev.fatherName,
+        dob: extractedDob || prev.dob
+      }));
+
+      if (jobId !== panExtractionJobRef.current) {
+        return;
+      }
+
+      const hasAutoFill = Boolean(extractedPan || extractedName || extractedFather || extractedDob);
+
+      setPanExtraction({
+        status: hasAutoFill ? 'success' : 'warning',
+        message: hasAutoFill
+          ? 'We auto-filled details from your PAN card. Please review them below.'
+          : 'We could not read details automatically. You can fill them in manually.'
+      });
+    } catch (err) {
+      if (jobId !== panExtractionJobRef.current) {
+        return;
+      }
+      console.error('PAN extraction failed', err);
+      setPanExtraction({
+        status: 'error',
+        message:
+          err instanceof Error ? err.message : 'Unable to contact the PAN extraction service.'
+      });
+    }
   }
 
   function goToPreviousStep() {
@@ -685,7 +863,10 @@ function App() {
         return (
           <form className="card form-card" onSubmit={handleDocumentSubmit}>
             <h2>PAN verification</h2>
-            <p className="helper-text">Upload clear images or scans so that our loan officer can verify your identity.</p>
+            <p className="helper-text">
+              Upload a clear image of the front of your PAN card so we can validate your details before the
+              video call.
+            </p>
             {wizardError && <p className="wizard-error">{wizardError}</p>}
 
             <label htmlFor="pan-front">PAN card &mdash; front side</label>
@@ -697,14 +878,44 @@ function App() {
             />
             {documents.panFront && <p className="document-pill">{documents.panFront.name}</p>}
 
-            <label htmlFor="pan-back">PAN card &mdash; back side</label>
+            <label htmlFor="pan-number">PAN card number</label>
             <input
-              id="pan-back"
-              type="file"
-              accept="image/*,.pdf"
-              onChange={(event) => handleDocumentChange('panBack', event.target.files)}
+              id="pan-number"
+              type="text"
+              inputMode="text"
+              autoComplete="off"
+              value={panDetails.panNumber}
+              onChange={handlePanNumberChange}
+              placeholder="ABCDE1234F"
+              maxLength={10}
+              required
             />
-            {documents.panBack && <p className="document-pill">{documents.panBack.name}</p>}
+            <p className="field-hint">We auto-fill this when possible. You can edit it if the OCR misses a character.</p>
+
+            <section className="pan-summary" aria-live="polite">
+              <div className="pan-summary-header">
+                <h3>Details detected</h3>
+                <p className={`pan-status ${panExtraction.status}`}>
+                  {panExtraction.status === 'idle'
+                    ? 'Upload a crisp scan to auto-fill the information below.'
+                    : panExtraction.message}
+                </p>
+              </div>
+              <dl className="pan-details-grid">
+                <div>
+                  <dt>Name on card</dt>
+                  <dd>{panDetails.name || '—'}</dd>
+                </div>
+                <div>
+                  <dt>Father&apos;s name</dt>
+                  <dd>{panDetails.fatherName || '—'}</dd>
+                </div>
+                <div>
+                  <dt>Date of birth</dt>
+                  <dd>{panDetails.dob ? formatDate(panDetails.dob) : '—'}</dd>
+                </div>
+              </dl>
+            </section>
 
             <div className="form-actions">
               <button type="button" className="secondary-button" onClick={goToPreviousStep}>
@@ -741,6 +952,19 @@ function App() {
                       </dl>
                     </div>
                     <div>
+                      <h3>PAN details</h3>
+                      <dl>
+                        <dt>PAN number</dt>
+                        <dd>{panDetails.panNumber || '—'}</dd>
+                        <dt>Name on card</dt>
+                        <dd>{panDetails.name || '—'}</dd>
+                        <dt>Father&apos;s name</dt>
+                        <dd>{panDetails.fatherName || '—'}</dd>
+                        <dt>Date of birth</dt>
+                        <dd>{panDetails.dob ? formatDate(panDetails.dob) : '—'}</dd>
+                      </dl>
+                    </div>
+                    <div>
                       <h3>Loan details</h3>
                       <dl>
                         <dt>Date of birth</dt>
@@ -760,10 +984,22 @@ function App() {
                       <span className="document-pill">
                         {documents.panFront ? `PAN front — ${documents.panFront.name}` : 'PAN front pending'}
                       </span>
-                      <span className="document-pill">
-                        {documents.panBack ? `PAN back — ${documents.panBack.name}` : 'PAN back pending'}
-                      </span>
                     </div>
+                    {panExtraction.status === 'loading' && (
+                      <p className="document-note loading">{panExtraction.message}</p>
+                    )}
+                    {panExtraction.status === 'warning' && (
+                      <p className="document-note warning">{panExtraction.message}</p>
+                    )}
+                    {panExtraction.status === 'error' && (
+                      <p className="document-note error">{panExtraction.message}</p>
+                    )}
+                    {panExtraction.status === 'success' && (
+                      <p className="document-note success">{panExtraction.message}</p>
+                    )}
+                    {panExtraction.status === 'idle' && (
+                      <p className="document-note idle">Upload your PAN card to auto-fill the verification details.</p>
+                    )}
                   </div>
                   <div className="form-actions">
                     <button

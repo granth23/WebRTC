@@ -357,6 +357,109 @@ header p {
   font-size: 0.95rem;
 }
 
+.field-hint {
+  margin: -0.2rem 0 1rem;
+  font-size: 0.85rem;
+  color: rgba(148, 163, 184, 0.75);
+}
+
+.pan-summary {
+  margin-top: 0.5rem;
+  padding: 1.2rem 1.4rem;
+  border-radius: 1.1rem;
+  border: 1px solid rgba(99, 102, 241, 0.35);
+  background: rgba(15, 23, 42, 0.7);
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.pan-summary-header {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+
+.pan-summary-header h3 {
+  margin: 0;
+  font-size: 1rem;
+  font-weight: 600;
+  color: rgba(226, 232, 240, 0.9);
+}
+
+.pan-status {
+  margin: 0;
+  font-size: 0.9rem;
+  color: rgba(148, 163, 184, 0.85);
+}
+
+.pan-status.loading {
+  color: #fcd34d;
+}
+
+.pan-status.warning {
+  color: #fbbf24;
+}
+
+.pan-status.error {
+  color: #fca5a5;
+}
+
+.pan-status.success {
+  color: #bbf7d0;
+}
+
+.pan-status.idle {
+  color: rgba(148, 163, 184, 0.75);
+}
+
+.pan-details-grid {
+  margin: 0;
+  display: grid;
+  gap: 1rem;
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+}
+
+.pan-details-grid dt {
+  font-size: 0.75rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: rgba(148, 163, 184, 0.75);
+}
+
+.pan-details-grid dd {
+  margin: 0;
+  font-size: 0.95rem;
+  font-weight: 500;
+  color: #f8fafc;
+}
+
+.document-note {
+  margin: 0.4rem 0 0;
+  font-size: 0.85rem;
+  color: rgba(148, 163, 184, 0.85);
+}
+
+.document-note.loading {
+  color: #fcd34d;
+}
+
+.document-note.warning {
+  color: #fbbf24;
+}
+
+.document-note.error {
+  color: #fca5a5;
+}
+
+.document-note.success {
+  color: #bbf7d0;
+}
+
+.document-note.idle {
+  color: rgba(148, 163, 184, 0.7);
+}
+
 .document-tags {
   display: flex;
   flex-wrap: wrap;

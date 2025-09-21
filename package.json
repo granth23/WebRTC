@@ -14,7 +14,8 @@
     "user:build": "npm run build --prefix user",
     "employee:build": "npm run build --prefix employee",
     "user:start": "npm start --prefix user",
-    "employee:start": "npm start --prefix employee"
+    "employee:start": "npm start --prefix employee",
+    "user:pan": "python3 user/pan_server.py"
   },
   "keywords": [
     "webrtc",
