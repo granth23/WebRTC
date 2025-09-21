@@ -1,0 +1,23 @@
+{
+  "name": "webrtc-react-room",
+  "version": "1.0.0",
+  "description": "React-based WebRTC demo with manual signaling server.",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node server.js",
+    "build": "npm --prefix client run build",
+    "client:dev": "npm --prefix client run dev",
+    "client:install": "npm install --prefix client --include=dev"
+  },
+  "keywords": [
+    "webrtc",
+    "react",
+    "signaling"
+  ],
+  "author": "",
+  "license": "MIT",
+  "engines": {
+    "node": "20.x"
+  }
+}
