@@ -4,7 +4,11 @@
   "description": "React-based WebRTC demo with manual signaling server.",
   "main": "server.js",
   "scripts": {
-    "start": "node server.js"
+    "start": "node server.js",
+    "dev": "node server.js",
+    "build": "npm run build --prefix client",
+    "client:dev": "npm run dev --prefix client",
+    "client:install": "npm install --prefix client"
   },
   "keywords": [
     "webrtc",

@@ -4,19 +4,27 @@ const path = require('path');
 const crypto = require('crypto');
 
 const PORT = process.env.PORT || 3000;
-const PUBLIC_DIR = path.join(__dirname, 'public');
+const CLIENT_BUILD_DIR = path.join(__dirname, 'client', 'dist');
+const CLIENT_INDEX_FILE = path.join(CLIENT_BUILD_DIR, 'index.html');
 
 const clients = new Map();
 const rooms = new Map();
 let clientCounter = 1;
 
 const server = http.createServer((req, res) => {
-  const [rawPath] = req.url.split('?');
-  const requestPath = rawPath === '/' ? 'index.html' : decodeURIComponent(rawPath.replace(/^\/+/, ''));
-  const safePath = path.normalize(requestPath).replace(/^([.]{2}[\/])+/g, '');
-  const filePath = path.join(PUBLIC_DIR, safePath);
+  if (!fs.existsSync(CLIENT_INDEX_FILE)) {
+    res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
+    res.end(renderMissingBuildPage());
+    return;
+  }
 
-  if (!filePath.startsWith(PUBLIC_DIR)) {
+  const [rawPath] = req.url.split('?');
+  const trimmed = rawPath.replace(/^\/+/, '');
+  const requestPath = trimmed.length === 0 ? 'index.html' : decodeURIComponent(trimmed);
+  const safePath = path.normalize(requestPath).replace(/^([.]{2}[\/])+/g, '');
+  const filePath = path.join(CLIENT_BUILD_DIR, safePath);
+
+  if (!filePath.startsWith(CLIENT_BUILD_DIR)) {
     res.writeHead(403);
     res.end('Forbidden');
     return;
@@ -24,8 +32,25 @@ const server = http.createServer((req, res) => {
 
   fs.readFile(filePath, (err, data) => {
     if (err) {
-      res.writeHead(err.code === 'ENOENT' ? 404 : 500);
-      res.end('Not Found');
+      if (err.code === 'ENOENT') {
+        if (!path.extname(safePath)) {
+          fs.readFile(CLIENT_INDEX_FILE, (indexErr, indexData) => {
+            if (indexErr) {
+              res.writeHead(500);
+              res.end('Failed to load client.');
+              return;
+            }
+            res.writeHead(200, { 'Content-Type': 'text/html' });
+            res.end(indexData);
+          });
+        } else {
+          res.writeHead(404);
+          res.end('Not Found');
+        }
+      } else {
+        res.writeHead(500);
+        res.end('Internal Server Error');
+      }
       return;
     }
 
@@ -329,13 +354,57 @@ function getContentType(ext) {
     case '.css':
       return 'text/css';
     case '.js':
+    case '.mjs':
     case '.jsx':
       return 'application/javascript';
     case '.json':
       return 'application/json';
+    case '.svg':
+      return 'image/svg+xml';
+    case '.png':
+      return 'image/png';
+    case '.jpg':
+    case '.jpeg':
+      return 'image/jpeg';
+    case '.ico':
+      return 'image/x-icon';
+    case '.map':
+      return 'application/json';
+    case '.webm':
+      return 'video/webm';
     default:
       return 'text/plain';
   }
+}
+
+function renderMissingBuildPage() {
+  return `<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>WebRTC Rooms – Build Required</title>
+    <style>
+      body { font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; padding: 3rem; background: #0f172a; color: #e2e8f0; }
+      main { max-width: 640px; margin: 0 auto; background: rgba(15,23,42,.8); padding: 2rem 2.5rem; border-radius: 16px; border: 1px solid rgba(148,163,184,.3); box-shadow: 0 20px 50px rgba(2,6,23,.6); }
+      h1 { margin-top: 0; font-size: 1.75rem; }
+      code { background: rgba(15,23,42,.9); padding: 0.2rem 0.4rem; border-radius: 6px; }
+      ol { line-height: 1.6; }
+    </style>
+  </head>
+  <body>
+    <main>
+      <h1>Client build not found</h1>
+      <p>The compiled React client is missing. To run the full application:</p>
+      <ol>
+        <li>Install dependencies inside <code>client/</code> with <code>npm run client:install</code> (or <code>cd client &amp;&amp; npm install</code>).</li>
+        <li>Create a production build via <code>npm run build</code>.</li>
+        <li>Restart this server with <code>npm start</code>.</li>
+      </ol>
+      <p>For local development you can also run <code>npm run dev</code> from <code>client/</code> and rely on the Vite dev server while keeping this signaling server running.</p>
+    </main>
+  </body>
+</html>`;
 }
 
 server.listen(PORT, () => {
