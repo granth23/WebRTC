@@ -113,6 +113,15 @@ function App() {
   const manualCloseRef = useRef(false);
 
   useEffect(() => {
+    const video = localVideoRef.current;
+    const stream = localStreamRef.current;
+
+    if (video && stream && video.srcObject !== stream) {
+      video.srcObject = stream;
+    }
+  }, [currentStep]);
+
+  useEffect(() => {
     let cancelled = false;
 
     async function initMedia() {
