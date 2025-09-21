@@ -257,6 +257,8 @@ function App() {
   const [sessionState, setSessionState] = useState('idle');
   const [roomId, setRoomId] = useState('');
   const [connected, setConnected] = useState(false);
+  const [verificationCode, setVerificationCode] = useState('');
+  const [completed, setCompleted] = useState(false);
 
   const localVideoRef = useRef(null);
   const remoteVideoRef = useRef(null);
@@ -266,6 +268,7 @@ function App() {
   const pendingCandidatesRef = useRef([]);
   const manualCloseRef = useRef(false);
   const panExtractionJobRef = useRef(0);
+  const finalizedRef = useRef(false);
 
   useEffect(() => {
     const video = localVideoRef.current;
@@ -378,6 +381,9 @@ function App() {
       cleanupPeer();
       setConnected(false);
       setRoomId('');
+      if (finalizedRef.current) {
+        return;
+      }
       if (userInitiated) {
         setStatus('Session ended. You can start a new verification when you\'re ready.');
       } else {
@@ -545,6 +551,9 @@ function App() {
         setSessionState('queue');
         setError('');
         setStatus('Waiting for a loan officer to join your session...');
+        if (message.verificationCode) {
+          setVerificationCode(message.verificationCode);
+        }
         break;
       case 'ready':
         setStatus('Loan officer connected. Establishing call...');
@@ -565,6 +574,9 @@ function App() {
         handleCandidate(message.candidate);
         break;
       case 'peer-left':
+        if (finalizedRef.current) {
+          break;
+        }
         setConnected(false);
         cleanupPeer();
         setSessionState('queue');
@@ -572,6 +584,18 @@ function App() {
           remoteVideoRef.current.srcObject = null;
         }
         setStatus('The loan officer left the call. Waiting for the next available person.');
+        break;
+      case 'verification-complete':
+        {
+          const code = message.verificationCode || verificationCode;
+          if (message.verificationCode) {
+            setVerificationCode(message.verificationCode);
+          }
+          finalizeSession(code);
+        }
+        break;
+      case 'verification-error':
+        setError(message.message || 'Verification failed. Please try again.');
         break;
       case 'error':
         setError(message.message || 'An unknown error occurred.');
@@ -598,8 +622,23 @@ function App() {
     setError('');
     setStatus('Connecting you with a loan officer...');
     setSessionState('registering');
+    setCompleted(false);
+    setVerificationCode('');
+    finalizedRef.current = false;
     setupSocket((socket) => {
-      socket.send(JSON.stringify({ type: 'register-user', name: trimmed }));
+      const panNumber = sanitizePanNumber(panDetails.panNumber);
+      const details = {
+        panNumber,
+        panName: panDetails.name ? formatPanName(panDetails.name) : '',
+        dob: panDetails.dob ? normalisePanDob(panDetails.dob) : ''
+      };
+      socket.send(
+        JSON.stringify({
+          type: 'register-user',
+          name: trimmed,
+          details
+        })
+      );
     });
   }
 
@@ -614,6 +653,57 @@ function App() {
       setRoomId('');
       setSessionState('idle');
       setStatus(INITIAL_STATUS);
+    }
+    setVerificationCode('');
+    setCompleted(false);
+    finalizedRef.current = false;
+  }
+
+  function finalizeSession(codeValue) {
+    if (finalizedRef.current) {
+      return;
+    }
+    finalizedRef.current = true;
+    cleanupPeer();
+    setConnected(false);
+    setStatus('Verification complete. Thank you for finishing the process.');
+    setError('');
+    setSessionState('completed');
+    setCompleted(true);
+
+    if (localStreamRef.current) {
+      localStreamRef.current.getTracks().forEach((track) => track.stop());
+      localStreamRef.current = null;
+    }
+    if (localVideoRef.current) {
+      localVideoRef.current.srcObject = null;
+    }
+    if (remoteVideoRef.current) {
+      remoteVideoRef.current.srcObject = null;
+    }
+
+    const finalCode = codeValue || verificationCode;
+
+    const summary = {
+      customerInfo,
+      financialInfo,
+      panDetails,
+      documents: {
+        panFront: documents.panFront ? documents.panFront.name : null
+      },
+      verificationCode: finalCode,
+      roomId
+    };
+    console.log('Loan application completed', summary);
+
+    if (finalCode) {
+      setVerificationCode(finalCode);
+    }
+
+    if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
+      manualCloseRef.current = true;
+      wsRef.current.send(JSON.stringify({ type: 'leave' }));
+      wsRef.current.close();
     }
   }
 
@@ -844,6 +934,29 @@ function App() {
   }
 
   function renderStepContent() {
+    if (completed) {
+      return (
+        <div className="card thank-you-card">
+          <h2>Thank you</h2>
+          <p>
+            Your loan verification call is complete. Our loan officer has recorded your details and will reach out with the next
+            steps shortly.
+          </p>
+          <div className="thank-you-details">
+            <div>
+              <span className="label">Applicant</span>
+              <strong>{customerInfo.fullName || '—'}</strong>
+            </div>
+            <div>
+              <span className="label">Verification code</span>
+              <code>{verificationCode || '—'}</code>
+            </div>
+          </div>
+          <p className="thank-you-note">You may close this window. A confirmation has been logged for our records.</p>
+        </div>
+      );
+    }
+
     switch (currentStep) {
       case 1:
         return (
@@ -1169,6 +1282,9 @@ function App() {
                 <div className="video-card">
                   <h3>Your camera</h3>
                   <video ref={localVideoRef} autoPlay playsInline muted></video>
+                  <p className="verification-code">
+                    Verification code: <code>{verificationCode || 'Generating…'}</code>
+                  </p>
                 </div>
                 <div className="video-card">
                   <h3>Loan officer</h3>
@@ -1176,7 +1292,7 @@ function App() {
                 </div>
               </section>
             </div>
-            {connected && <div className="call-indicator">You are connected to a loan officer.</div>}
+            {connected && !completed && <div className="call-indicator">You are connected to a loan officer.</div>}
           </>
         );
       default:
@@ -1196,8 +1312,13 @@ function App() {
 
       <ol className="stepper" role="list">
         {STEPS.map((step) => {
-          const state =
-            currentStep === step.id ? 'active' : currentStep > step.id ? 'complete' : 'upcoming';
+          const state = completed
+            ? 'complete'
+            : currentStep === step.id
+            ? 'active'
+            : currentStep > step.id
+            ? 'complete'
+            : 'upcoming';
           return (
             <li key={step.id} className={`step ${state}`}>
               <span className="step-index" aria-hidden="true">

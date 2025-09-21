@@ -604,6 +604,24 @@ header p {
   object-fit: cover;
 }
 
+.verification-code {
+  margin: 0;
+  font-size: 0.9rem;
+  color: var(--text-muted);
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.verification-code code {
+  margin-left: 0.4rem;
+  padding: 0.2rem 0.45rem;
+  border: 1px solid var(--border);
+  background: var(--surface-muted);
+  font-family: 'Roboto Mono', ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono', 'Courier New', monospace;
+  font-size: 0.85rem;
+  letter-spacing: 0.12em;
+}
+
 .call-indicator {
   align-self: flex-start;
   padding: 0.65rem 1.2rem;
@@ -613,6 +631,53 @@ header p {
   font-weight: 600;
   letter-spacing: 0.05em;
   text-transform: uppercase;
+}
+
+.thank-you-card {
+  display: grid;
+  gap: 1.5rem;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  padding: 2rem 2.2rem;
+  text-align: left;
+}
+
+.thank-you-card h2 {
+  margin: 0;
+  font-size: 1.65rem;
+  letter-spacing: 0.01em;
+}
+
+.thank-you-details {
+  display: grid;
+  gap: 1rem;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  align-items: start;
+}
+
+.thank-you-details .label {
+  display: block;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  font-size: 0.75rem;
+  color: var(--text-muted);
+  margin-bottom: 0.35rem;
+}
+
+.thank-you-details code {
+  display: inline-block;
+  padding: 0.35rem 0.65rem;
+  border: 1px solid var(--border);
+  background: var(--surface-muted);
+  font-family: 'Roboto Mono', ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono', 'Courier New', monospace;
+  font-size: 0.95rem;
+  letter-spacing: 0.12em;
+}
+
+.thank-you-note {
+  margin: 0;
+  font-size: 0.95rem;
+  color: var(--text-muted);
 }
 
 @media (max-width: 760px) {

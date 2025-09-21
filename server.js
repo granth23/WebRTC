@@ -11,6 +11,7 @@ const clients = new Map();
 const rooms = new Map();
 const waitingUsers = new Map();
 const employees = new Set();
+const roomMetadata = new Map();
 let clientCounter = 1;
 
 const server = http.createServer((req, res) => {
@@ -139,7 +140,7 @@ server.on('upgrade', (req, socket) => {
 function handleMessage(client, message) {
   switch (message.type) {
     case 'register-user':
-      return handleRegisterUser(client, message.name);
+      return handleRegisterUser(client, message);
     case 'employee-ready':
       return handleEmployeeReady(client);
     case 'list-users':
@@ -148,6 +149,8 @@ function handleMessage(client, message) {
       return handleCreateRoom(client, message.roomId);
     case 'join':
       return handleJoinRoom(client, message.roomId);
+    case 'verify-code':
+      return handleVerifyCode(client, message.code);
     case 'offer':
     case 'answer':
     case 'candidate':
@@ -159,13 +162,13 @@ function handleMessage(client, message) {
   }
 }
 
-function handleRegisterUser(client, rawName) {
+function handleRegisterUser(client, payload = {}) {
   if (client.roomId) {
     send(client, { type: 'error', message: 'You already have an active session.' });
     return;
   }
 
-  const name = sanitizeDisplayName(rawName);
+  const name = sanitizeDisplayName(payload.name);
   if (!name) {
     send(client, { type: 'error', message: 'A valid display name is required.' });
     return;
@@ -182,9 +185,13 @@ function handleRegisterUser(client, rawName) {
   client.isHost = true;
 
   rooms.set(roomId, new Set([client]));
+  const details = sanitizeSessionDetails(payload.details);
+  const verificationCode = generateVerificationCode();
+
+  roomMetadata.set(roomId, { details, verificationCode });
   waitingUsers.set(roomId, { name, createdAt: Date.now() });
 
-  send(client, { type: 'registered', roomId, name });
+  send(client, { type: 'registered', roomId, name, verificationCode });
   broadcastUserList();
 }
 
@@ -287,6 +294,10 @@ function handleJoinRoom(client, roomIdRaw) {
   if (hostName) {
     joinMessage.hostName = hostName;
   }
+  const metadata = roomMetadata.get(roomId);
+  if (metadata && metadata.details) {
+    joinMessage.details = metadata.details;
+  }
   send(client, joinMessage);
 
   if (participants.size === 2) {
@@ -294,6 +305,41 @@ function handleJoinRoom(client, roomIdRaw) {
       send(participant, { type: 'ready', initiator: participant.isHost });
     }
   }
+}
+
+function handleVerifyCode(client, providedCode) {
+  if (client.role !== 'employee' || !client.roomId) {
+    send(client, { type: 'error', message: 'You are not in an active session.' });
+    return;
+  }
+
+  const metadata = roomMetadata.get(client.roomId);
+  if (!metadata) {
+    send(client, { type: 'verification-error', message: 'Session metadata unavailable. Please retry.' });
+    return;
+  }
+
+  const expected = metadata.verificationCode;
+  const submitted = sanitizeVerificationCode(providedCode);
+
+  if (!submitted) {
+    send(client, { type: 'verification-error', message: 'Enter the 4-digit code shared with the customer.' });
+    return;
+  }
+
+  if (submitted !== expected) {
+    send(client, { type: 'verification-error', message: 'The code does not match. Please verify with the customer.' });
+    return;
+  }
+
+  const participants = rooms.get(client.roomId);
+  if (participants) {
+    for (const participant of participants) {
+      send(participant, { type: 'verification-complete', verificationCode: expected });
+    }
+  }
+
+  roomMetadata.delete(client.roomId);
 }
 
 function forwardToRoom(client, message) {
@@ -327,6 +373,7 @@ function cleanupClient(client, options = {}) {
   if (!participants) {
     if (roomId) {
       rooms.delete(roomId);
+      roomMetadata.delete(roomId);
       broadcastUserList();
     }
     client.roomId = null;
@@ -349,6 +396,7 @@ function cleanupClient(client, options = {}) {
   if (participants.size === 0) {
     rooms.delete(roomId);
     waitingUsers.delete(roomId);
+    roomMetadata.delete(roomId);
     broadcastUserList();
     return;
   }
@@ -377,6 +425,7 @@ function cleanupClient(client, options = {}) {
     waitingUsers.set(roomId, { name: host.displayName || roomId, createdAt: Date.now() });
   } else {
     waitingUsers.delete(roomId);
+    roomMetadata.delete(roomId);
   }
 
   broadcastUserList();
@@ -485,6 +534,47 @@ function sanitizeDisplayName(value) {
     return '';
   }
   return trimmed.slice(0, 48);
+}
+
+function sanitizeSessionDetails(value) {
+  if (!value || typeof value !== 'object') {
+    return null;
+  }
+
+  const details = {};
+  if (typeof value.panNumber === 'string') {
+    const pan = value.panNumber.toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 10);
+    if (pan) {
+      details.panNumber = pan;
+    }
+  }
+  if (typeof value.panName === 'string') {
+    const name = value.panName.replace(/\s+/g, ' ').trim().slice(0, 64);
+    if (name) {
+      details.panName = name;
+    }
+  }
+  if (typeof value.dob === 'string') {
+    const dob = value.dob.trim().slice(0, 32);
+    if (dob) {
+      details.dob = dob;
+    }
+  }
+
+  return Object.keys(details).length > 0 ? details : null;
+}
+
+function generateVerificationCode() {
+  const code = Math.floor(1000 + Math.random() * 9000);
+  return String(code);
+}
+
+function sanitizeVerificationCode(value) {
+  if (typeof value !== 'string' && typeof value !== 'number') {
+    return '';
+  }
+  const digits = String(value).replace(/\D/g, '').slice(0, 4);
+  return digits.length === 4 ? digits : '';
 }
 
 function generateRoomCode() {

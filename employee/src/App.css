@@ -90,18 +90,17 @@ header p {
   max-width: 720px;
 }
 
-.layout {
-  width: 100%;
-  max-width: 960px;
-  display: flex;
-  flex-direction: column;
-  gap: 2.5rem;
-}
-
 .controls {
   display: grid;
   gap: 2rem;
   grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+}
+
+.session-layout {
+  width: 100%;
+  max-width: 960px;
+  display: grid;
+  gap: 2.5rem;
 }
 
 .card {
@@ -177,31 +176,111 @@ header p {
   font-family: var(--font-body);
 }
 
-.card.status p {
-  margin: 0 0 0.75rem;
-  line-height: 1.55;
+.card.session-card {
+  gap: 1.5rem;
+}
+
+.card.session-card .helper-text {
+  margin: 0;
   color: var(--text-secondary);
+  line-height: 1.6;
+  font-size: 0.96rem;
 }
 
-.card.status .selected {
-  color: var(--primary-strong);
+.session-summary {
+  display: grid;
+  gap: 1rem;
+}
+
+.session-summary .label {
+  display: block;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  font-size: 0.75rem;
+  color: var(--text-muted);
+  margin-bottom: 0.3rem;
+}
+
+.session-summary code {
+  display: inline-block;
+  padding: 0.35rem 0.6rem;
+  border: 1px solid var(--border);
+  background: var(--surface-muted);
+  font-family: 'Roboto Mono', ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono', 'Courier New', monospace;
+  font-size: 0.9rem;
+  letter-spacing: 0.1em;
+}
+
+.verification-form {
+  display: grid;
+  gap: 0.75rem;
+}
+
+.verification-form label {
   font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  font-size: 0.78rem;
+  color: var(--text-muted);
 }
 
-.card.status .error {
-  margin: 0.6rem 0 0;
+.verification-form input {
+  padding: 0.85rem 1rem;
+  border: 1px solid var(--border);
+  border-radius: 0;
+  background: var(--surface-muted);
+  font-size: 1rem;
+  letter-spacing: 0.12em;
+  font-family: 'Roboto Mono', ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono', 'Courier New', monospace;
+  text-transform: uppercase;
+  color: var(--text-primary);
+}
+
+.verification-form input:focus {
+  outline: 2px solid var(--primary);
+  outline-offset: 2px;
+  background: #ffffff;
+}
+
+.primary-button {
+  justify-self: flex-start;
+  padding: 0.9rem 1.6rem;
+  border: 1px solid var(--primary);
+  background: var(--primary);
+  color: #ffffff;
+  text-transform: uppercase;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  cursor: pointer;
+  transition: background 0.2s ease, border-color 0.2s ease;
+}
+
+.primary-button:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+  background: var(--surface-muted);
+  border-color: var(--border);
+  color: var(--text-muted);
+}
+
+.primary-button:not(:disabled):hover {
+  background: var(--primary-strong);
+  border-color: var(--primary-strong);
+}
+
+.message.error {
+  margin: 0;
   padding: 0.75rem 0.9rem;
   border: 1px solid var(--danger);
   background: var(--danger-soft);
   color: var(--danger);
 }
 
-.card.status .leave {
+.leave {
   margin-top: 1.2rem;
   padding: 0.9rem 1.5rem;
-  border: 1px solid #7f1515;
-  border-radius: 0;
-  background: #9b1c1c;
+  border: 1px solid var(--danger);
+  background: var(--danger);
   color: #ffffff;
   font-weight: 600;
   letter-spacing: 0.08em;
@@ -210,7 +289,7 @@ header p {
   transition: background 0.2s ease, border-color 0.2s ease;
 }
 
-.card.status .leave:hover {
+.leave:hover {
   background: #7f1515;
   border-color: #6a1010;
 }
@@ -271,6 +350,13 @@ header p {
   font-weight: 600;
   letter-spacing: 0.05em;
   text-transform: uppercase;
+}
+
+@media (min-width: 1080px) {
+  .session-layout {
+    grid-template-columns: 1.05fr 0.95fr;
+    align-items: start;
+  }
 }
 
 @media (max-width: 760px) {

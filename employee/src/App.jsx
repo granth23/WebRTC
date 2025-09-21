@@ -24,6 +24,8 @@ function App() {
   const [sessionState, setSessionState] = useState('idle');
   const [connected, setConnected] = useState(false);
   const [roomId, setRoomId] = useState('');
+  const [sessionDetails, setSessionDetails] = useState(null);
+  const [verificationInput, setVerificationInput] = useState('');
 
   const localVideoRef = useRef(null);
   const remoteVideoRef = useRef(null);
@@ -32,6 +34,7 @@ function App() {
   const localStreamRef = useRef(null);
   const pendingCandidatesRef = useRef([]);
   const manualCloseRef = useRef(false);
+  const finalizedRef = useRef(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -127,8 +130,15 @@ function App() {
       setConnected(false);
       setRoomId('');
       setSelectedUser(null);
+      setSessionDetails(null);
+      setVerificationInput('');
       setSessionState('idle');
       setError('');
+      if (finalizedRef.current) {
+        finalizedRef.current = false;
+        setStatus('Verification complete. Ready for the next customer.');
+        return;
+      }
       if (userInitiated) {
         setStatus('Disconnected. Use the list to join another customer when you are ready.');
       } else {
@@ -307,8 +317,12 @@ function App() {
         setRoomId(message.roomId);
         setError('');
         setSessionState('connecting');
+        setVerificationInput('');
         if (message.hostName) {
           setSelectedUser((prev) => prev ?? { roomId: message.roomId, name: message.hostName });
+        }
+        if (message.details) {
+          setSessionDetails(message.details);
         }
         const label = message.hostName || (selectedUser ? selectedUser.name : 'customer');
         setStatus(`Joining session with ${label}. Preparing connection...`);
@@ -337,10 +351,37 @@ function App() {
         setRoomId('');
         setSessionState('idle');
         setSelectedUser(null);
+        setSessionDetails(null);
+        setVerificationInput('');
+        finalizedRef.current = false;
         if (remoteVideoRef.current) {
           remoteVideoRef.current.srcObject = null;
         }
         setStatus('The customer left the session. Select another name to help.');
+        break;
+      case 'verification-complete':
+        finalizedRef.current = true;
+        cleanupPeer();
+        setConnected(false);
+        setStatus('Verification complete. Ready for the next customer.');
+        setSessionState('idle');
+        setRoomId('');
+        setSelectedUser(null);
+        setSessionDetails(null);
+        setVerificationInput('');
+        setError('');
+        if (remoteVideoRef.current) {
+          remoteVideoRef.current.srcObject = null;
+        }
+        if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
+          manualCloseRef.current = true;
+          wsRef.current.send(JSON.stringify({ type: 'leave' }));
+          wsRef.current.close();
+        }
+        break;
+      case 'verification-error':
+        setError(message.message || 'The verification code did not match.');
+        setStatus('Verification failed. Confirm the code with the customer.');
         break;
       case 'error':
         setError(message.message || 'An unknown error occurred.');
@@ -363,6 +404,9 @@ function App() {
     setStatus(`Connecting to ${user.name}...`);
     setError('');
     setSessionState('connecting');
+    setSessionDetails(null);
+    setVerificationInput('');
+    finalizedRef.current = false;
     setupSocket((socket) => {
       socket.send(JSON.stringify({ type: 'join', roomId: user.roomId }));
     });
@@ -370,15 +414,35 @@ function App() {
 
   function handleLeaveSession() {
     if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
+      finalizedRef.current = false;
       wsRef.current.send(JSON.stringify({ type: 'leave' }));
     }
     cleanupPeer();
     setConnected(false);
     setRoomId('');
     setSelectedUser(null);
+    setSessionDetails(null);
+    setVerificationInput('');
     setSessionState('idle');
     setStatus('Session ended. Select another customer when you are ready.');
     setError('');
+  }
+
+  function handleVerificationInput(event) {
+    const digits = event.target.value.replace(/\D/g, '').slice(0, 4);
+    setVerificationInput(digits);
+  }
+
+  function handleVerificationSubmit(event) {
+    event.preventDefault();
+    const digits = verificationInput.replace(/\D/g, '').slice(0, 4);
+    if (digits.length !== 4) {
+      setError('Enter the 4-digit code provided by the customer.');
+      return;
+    }
+    setError('');
+    setStatus('Validating the customer code...');
+    sendSignal({ type: 'verify-code', code: digits });
   }
 
   const busy = sessionState === 'connecting' || sessionState === 'call';
@@ -390,7 +454,7 @@ function App() {
         <p>Pick a customer from the queue to start a secure WebRTC session.</p>
       </header>
 
-      <main className="layout">
+      <div className="session-layout">
         <section className="controls">
           <div className="card queue">
             <h2>Waiting customers</h2>
@@ -410,11 +474,61 @@ function App() {
             {busy && <p className="hint">Finish the active session before joining another customer.</p>}
           </div>
 
-          <div className="card status">
-            <h2>Session status</h2>
-            <p>{status}</p>
-            {selectedUser && <p className="selected">Current customer: <strong>{selectedUser.name}</strong></p>}
-            {error && <p className="error">{error}</p>}
+          <div className="card session-card">
+            <h2>Session overview</h2>
+            <p className="helper-text">{status}</p>
+            {selectedUser ? (
+              <div className="session-summary">
+                <div>
+                  <span className="label">Customer</span>
+                  <strong>{selectedUser.name}</strong>
+                </div>
+                {sessionDetails?.panNumber && (
+                  <div>
+                    <span className="label">PAN number</span>
+                    <code>{sessionDetails.panNumber}</code>
+                  </div>
+                )}
+                {sessionDetails?.panName && (
+                  <div>
+                    <span className="label">Name on PAN</span>
+                    <strong>{sessionDetails.panName}</strong>
+                  </div>
+                )}
+                {sessionDetails?.dob && (
+                  <div>
+                    <span className="label">Date of birth</span>
+                    <span>{sessionDetails.dob}</span>
+                  </div>
+                )}
+              </div>
+            ) : (
+              <p className="empty">Select a customer from the queue to view their details.</p>
+            )}
+
+            <form className="verification-form" onSubmit={handleVerificationSubmit}>
+              <label htmlFor="verification-code">Enter verification code</label>
+              <input
+                id="verification-code"
+                type="text"
+                inputMode="numeric"
+                pattern="\d{4}"
+                value={verificationInput}
+                onChange={handleVerificationInput}
+                placeholder="1234"
+                maxLength={4}
+                disabled={!selectedUser || sessionState === 'idle' || finalizedRef.current}
+              />
+              <button
+                type="submit"
+                className="primary-button"
+                disabled={!selectedUser || !connected || verificationInput.length !== 4}
+              >
+                Verify and complete
+              </button>
+            </form>
+
+            {error && <p className="error message">{error}</p>}
             {roomId && (
               <p className="session-id">
                 Session ID: <code>{roomId}</code>
@@ -438,9 +552,11 @@ function App() {
             <video ref={remoteVideoRef} autoPlay playsInline></video>
           </div>
         </section>
+      </div>
 
-        {connected && <div className="call-indicator">You are assisting {selectedUser ? selectedUser.name : 'a customer'}.</div>}
-      </main>
+      {connected && (
+        <div className="call-indicator">You are assisting {selectedUser ? selectedUser.name : 'a customer'}.</div>
+      )}
     </div>
   );
 }
