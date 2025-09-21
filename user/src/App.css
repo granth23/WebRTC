@@ -1,0 +1,209 @@
+:root {
+  color-scheme: dark;
+}
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  min-height: 100vh;
+  font-family: 'Inter', 'Segoe UI', system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
+  background: radial-gradient(circle at top left, #1e3a8a 0%, #0f172a 45%, #020617 100%);
+  color: #e2e8f0;
+}
+
+.page {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 2.5rem 1.5rem 3rem;
+  gap: 2rem;
+}
+
+header {
+  text-align: center;
+  max-width: 780px;
+}
+
+header h1 {
+  margin: 0 0 0.5rem;
+  font-size: clamp(2rem, 4vw, 2.75rem);
+  font-weight: 700;
+}
+
+header p {
+  margin: 0;
+  color: rgba(226, 232, 240, 0.8);
+  font-size: 1.05rem;
+}
+
+.layout {
+  width: 100%;
+  max-width: 1100px;
+  display: flex;
+  flex-direction: column;
+  gap: 2rem;
+}
+
+.controls {
+  display: grid;
+  gap: 1.5rem;
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+}
+
+.card {
+  background: rgba(15, 23, 42, 0.85);
+  border: 1px solid rgba(148, 163, 184, 0.25);
+  border-radius: 18px;
+  padding: 1.75rem;
+  box-shadow: 0 25px 60px rgba(2, 6, 23, 0.45);
+}
+
+.card h2 {
+  margin: 0 0 1rem;
+  font-size: 1.35rem;
+}
+
+.card label {
+  display: block;
+  font-size: 0.95rem;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+  color: rgba(148, 163, 184, 0.85);
+  margin-bottom: 0.5rem;
+}
+
+.card input {
+  width: 100%;
+  padding: 0.85rem 1rem;
+  border-radius: 0.9rem;
+  border: 1px solid rgba(148, 163, 184, 0.35);
+  background: rgba(15, 23, 42, 0.75);
+  color: #f8fafc;
+  font-size: 1rem;
+  transition: border-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+.card input:focus {
+  outline: none;
+  border-color: rgba(96, 165, 250, 0.8);
+  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.25);
+}
+
+.card button,
+.card .leave {
+  width: 100%;
+  margin-top: 1.25rem;
+  padding: 0.85rem 1rem;
+  border-radius: 999px;
+  border: none;
+  background: linear-gradient(135deg, #38bdf8 0%, #6366f1 100%);
+  color: #0f172a;
+  font-weight: 600;
+  font-size: 1rem;
+  cursor: pointer;
+  transition: transform 0.15s ease, box-shadow 0.15s ease;
+}
+
+.card button:hover,
+.card .leave:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 18px 32px rgba(99, 102, 241, 0.35);
+}
+
+.card button:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+  transform: none;
+  box-shadow: none;
+}
+
+.card .leave {
+  background: linear-gradient(135deg, rgba(239, 68, 68, 0.85), rgba(248, 113, 113, 0.85));
+  color: #fff;
+}
+
+.status p {
+  margin: 0 0 0.75rem;
+  line-height: 1.5;
+}
+
+.status .error {
+  margin: 0.5rem 0 0;
+  padding: 0.65rem 0.9rem;
+  border-radius: 0.8rem;
+  background: rgba(239, 68, 68, 0.12);
+  color: #fca5a5;
+  border: 1px solid rgba(239, 68, 68, 0.25);
+}
+
+.session-id {
+  margin: 0.75rem 0 0;
+  font-size: 0.85rem;
+  color: rgba(148, 163, 184, 0.9);
+}
+
+.session-id code {
+  background: rgba(15, 23, 42, 0.7);
+  padding: 0.15rem 0.4rem;
+  border-radius: 0.5rem;
+}
+
+.videos {
+  display: grid;
+  gap: 1.5rem;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+}
+
+.video-card {
+  background: rgba(15, 23, 42, 0.75);
+  border: 1px solid rgba(100, 116, 139, 0.25);
+  border-radius: 18px;
+  padding: 1.25rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.05);
+}
+
+.video-card h3 {
+  margin: 0;
+  font-size: 1.05rem;
+  font-weight: 600;
+  color: rgba(226, 232, 240, 0.9);
+}
+
+.video-card video {
+  width: 100%;
+  height: 100%;
+  min-height: 220px;
+  background: #000;
+  border-radius: 1rem;
+  object-fit: cover;
+}
+
+.call-indicator {
+  align-self: center;
+  padding: 0.7rem 1.5rem;
+  border-radius: 999px;
+  background: rgba(34, 197, 94, 0.1);
+  border: 1px solid rgba(34, 197, 94, 0.35);
+  color: #4ade80;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+}
+
+@media (max-width: 720px) {
+  .page {
+    padding: 2rem 1rem 2.5rem;
+  }
+
+  .card {
+    padding: 1.5rem;
+  }
+}

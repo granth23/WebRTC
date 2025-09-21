@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 
-const INITIAL_STATUS = 'Create a room or join with a shared code to start a call.';
+const INITIAL_STATUS = 'Enter your name to begin a support session.';
 const DEFAULT_SIGNALING_PATH = import.meta.env.VITE_SIGNALING_PATH ?? '/ws';
 
 function resolveSignalingUrl() {
@@ -8,25 +8,28 @@ function resolveSignalingUrl() {
   if (explicit.length > 0) {
     return explicit;
   }
-
   if (typeof window === 'undefined') {
     return '';
   }
-
-  const path = DEFAULT_SIGNALING_PATH.startsWith('/')
-    ? DEFAULT_SIGNALING_PATH
-    : `/${DEFAULT_SIGNALING_PATH}`;
+  const path = DEFAULT_SIGNALING_PATH.startsWith('/') ? DEFAULT_SIGNALING_PATH : `/${DEFAULT_SIGNALING_PATH}`;
   const protocol = window.location.protocol === 'https:' ? 'wss' : 'ws';
   return `${protocol}://${window.location.host}${path}`;
 }
 
+function sanitizeDisplayName(value) {
+  if (typeof value !== 'string') {
+    return '';
+  }
+  return value.replace(/\s+/g, ' ').trim();
+}
+
 function App() {
-  const [roomCode, setRoomCode] = useState('');
-  const [roomInput, setRoomInput] = useState('');
+  const [displayName, setDisplayName] = useState('');
   const [status, setStatus] = useState(INITIAL_STATUS);
   const [error, setError] = useState('');
+  const [sessionState, setSessionState] = useState('idle');
+  const [roomId, setRoomId] = useState('');
   const [connected, setConnected] = useState(false);
-  const [isHost, setIsHost] = useState(false);
 
   const localVideoRef = useRef(null);
   const remoteVideoRef = useRef(null);
@@ -50,8 +53,8 @@ function App() {
         }
       } catch (err) {
         console.error('Media error', err);
-        setError('Unable to access camera or microphone. Please ensure permissions are granted.');
-        setStatus('Camera or microphone permission is required for the call.');
+        setError('Camera and microphone access are required to start a session.');
+        setStatus('Grant access to your camera and microphone to continue.');
       }
     }
 
@@ -68,14 +71,21 @@ function App() {
 
   useEffect(() => {
     const handleBeforeUnload = () => {
-      if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN && roomCode) {
+      if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN && roomId) {
         wsRef.current.send(JSON.stringify({ type: 'leave' }));
       }
     };
 
     window.addEventListener('beforeunload', handleBeforeUnload);
     return () => window.removeEventListener('beforeunload', handleBeforeUnload);
-  }, [roomCode]);
+  }, [roomId]);
+
+  useEffect(() => () => {
+    if (wsRef.current) {
+      manualCloseRef.current = true;
+      wsRef.current.close();
+    }
+  }, []);
 
   function setupSocket(onOpen) {
     const existing = wsRef.current;
@@ -96,7 +106,7 @@ function App() {
     manualCloseRef.current = false;
 
     socket.addEventListener('open', () => {
-      setStatus('Connected to signaling server.');
+      setStatus('Connected to coordination server.');
       if (onOpen) {
         onOpen(socket);
       }
@@ -114,17 +124,20 @@ function App() {
     socket.addEventListener('close', () => {
       const userInitiated = manualCloseRef.current;
       manualCloseRef.current = false;
-      setStatus(
-        userInitiated ? 'Left the room. Create a new one or join with a code.' : 'Disconnected from signaling server.'
-      );
-      setConnected(false);
       cleanupPeer();
-      setRoomCode('');
-      setIsHost(false);
+      setConnected(false);
+      setRoomId('');
+      if (userInitiated) {
+        setStatus('Session ended. Enter your name to start again.');
+      } else {
+        setStatus('Connection to the coordination server was lost.');
+        setError('Connection closed unexpectedly. Refresh or start again.');
+      }
+      setSessionState('idle');
     });
 
     socket.addEventListener('error', () => {
-      setError('A signaling connection error occurred.');
+      setError('A connection error occurred. Please retry.');
     });
 
     return socket;
@@ -172,10 +185,11 @@ function App() {
     pc.onconnectionstatechange = () => {
       if (pc.connectionState === 'connected') {
         setConnected(true);
-        setStatus('Connected to peer.');
+        setSessionState('call');
+        setStatus('You are connected to an employee.');
       } else if (pc.connectionState === 'failed' || pc.connectionState === 'disconnected') {
         setConnected(false);
-        setStatus(`Connection state: ${pc.connectionState}. Attempting to recover...`);
+        setStatus(`Connection state: ${pc.connectionState}. Waiting for reconnection...`);
       }
     };
 
@@ -193,7 +207,7 @@ function App() {
       const offer = await pc.createOffer();
       await pc.setLocalDescription(offer);
       sendSignal({ type: 'offer', offer });
-      setStatus('Sending offer to peer...');
+      setStatus('Preparing a connection for the employee...');
     } catch (err) {
       console.error('Failed to create offer', err);
       setError('Unable to start the WebRTC offer.');
@@ -208,7 +222,7 @@ function App() {
       const answer = await pc.createAnswer();
       await pc.setLocalDescription(answer);
       sendSignal({ type: 'answer', answer });
-      setStatus('Offer received. Answer sent.');
+      setStatus('Employee offer received. Responding now.');
     } catch (err) {
       console.error('Error handling offer', err);
       setError('Could not process the incoming offer.');
@@ -220,7 +234,7 @@ function App() {
       const pc = getPeerConnection();
       await pc.setRemoteDescription(new RTCSessionDescription(answer));
       await flushPendingCandidates();
-      setStatus('Answer received. Finalizing connection...');
+      setStatus('Employee accepted the offer. Finalizing connection...');
     } catch (err) {
       console.error('Error handling answer', err);
       setError('Could not apply the remote answer.');
@@ -274,22 +288,16 @@ function App() {
 
   function handleSignal(message) {
     switch (message.type) {
+      case 'registered':
       case 'created':
-        setRoomCode(message.roomId);
-        setIsHost(true);
+        setRoomId(message.roomId);
+        setSessionState('queue');
         setError('');
-        setStatus(`Room ${message.roomId} created. Share the code with a friend.`);
-        setRoomInput('');
-        break;
-      case 'joined':
-        setRoomCode(message.roomId);
-        setIsHost(false);
-        setError('');
-        setStatus(`Joined room ${message.roomId}. Waiting for the call to start...`);
-        setRoomInput('');
+        setStatus('Waiting for an employee to join your session...');
         break;
       case 'ready':
-        setStatus('Peer joined! Establishing connection...');
+        setStatus('Employee connected. Establishing call...');
+        setSessionState('connecting');
         if (message.initiator) {
           startOffer();
         } else {
@@ -308,13 +316,11 @@ function App() {
       case 'peer-left':
         setConnected(false);
         cleanupPeer();
+        setSessionState('queue');
         if (remoteVideoRef.current) {
           remoteVideoRef.current.srcObject = null;
         }
-        if (typeof message.isHost === 'boolean') {
-          setIsHost(message.isHost);
-        }
-        setStatus(message.isHost ? 'Peer left the room. Waiting for someone new to join.' : 'Peer left the room.');
+        setStatus('The employee left the call. Waiting for the next available person.');
         break;
       case 'error':
         setError(message.message || 'An unknown error occurred.');
@@ -325,29 +331,23 @@ function App() {
     }
   }
 
-  function handleCreateRoom() {
-    setError('');
-    const desiredCode = generateRoomCode();
-    setStatus('Creating room...');
-    setupSocket((socket) => {
-      socket.send(JSON.stringify({ type: 'create', roomId: desiredCode }));
-    });
-  }
-
-  function handleJoinRoom() {
-    const code = roomInput.trim().toUpperCase();
-    if (!code) {
-      setError('Enter a room code to join.');
+  function beginSession(event) {
+    event.preventDefault();
+    const trimmed = sanitizeDisplayName(displayName);
+    if (!trimmed) {
+      setError('Please provide your name to continue.');
       return;
     }
+    setDisplayName(trimmed);
     setError('');
-    setStatus(`Joining room ${code}...`);
+    setStatus('Connecting you with an employee...');
+    setSessionState('registering');
     setupSocket((socket) => {
-      socket.send(JSON.stringify({ type: 'join', roomId: code }));
+      socket.send(JSON.stringify({ type: 'register-user', name: trimmed }));
     });
   }
 
-  function handleLeaveRoom() {
+  function handleLeaveSession() {
     if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
       manualCloseRef.current = true;
       wsRef.current.send(JSON.stringify({ type: 'leave' }));
@@ -355,90 +355,70 @@ function App() {
     } else {
       cleanupPeer();
       setConnected(false);
-      setRoomCode('');
-      setIsHost(false);
-      setStatus('Left the room. Create a new one or join with a code.');
+      setRoomId('');
+      setSessionState('idle');
+      setStatus(INITIAL_STATUS);
     }
-  }
-
-  async function handleCopyCode() {
-    if (!roomCode || !navigator.clipboard) {
-      return;
-    }
-    try {
-      await navigator.clipboard.writeText(roomCode);
-      setStatus('Room code copied to clipboard!');
-    } catch (err) {
-      console.error('Copy failed', err);
-      setError('Unable to copy the room code. Copy it manually.');
-    }
-  }
-
-  function generateRoomCode() {
-    return Math.random().toString(36).slice(2, 8).toUpperCase();
   }
 
   return (
-    <div className="container">
-      <h1>React WebRTC Rooms</h1>
-      <div className="controls">
-        <div className="control-card">
-          <h2>Create a room</h2>
-          <p>Generate a private code and share it with a friend to start a secure peer-to-peer call.</p>
-          <button type="button" onClick={handleCreateRoom} disabled={Boolean(roomCode)}>
-            {roomCode ? 'Room Active' : 'Create Room'}
-          </button>
-          {roomCode && (
-            <p className="room-code">
-              Code: <span>{roomCode}</span>
-              <button type="button" onClick={handleCopyCode}>Copy</button>
-            </p>
-          )}
-        </div>
+    <div className="page">
+      <header>
+        <h1>Customer Session</h1>
+        <p>Start a video session and we will connect you with the next available employee.</p>
+      </header>
 
-        <div className="control-card">
-          <h2>Join a room</h2>
-          <p>Enter the room code shared with you to join the conversation.</p>
-          <input
-            type="text"
-            value={roomInput}
-            onChange={(event) => setRoomInput(event.target.value.toUpperCase())}
-            placeholder="Enter room code"
-            maxLength={8}
-            disabled={Boolean(roomCode)}
-          />
-          <button type="button" onClick={handleJoinRoom} disabled={Boolean(roomCode)}>
-            Join Room
-          </button>
-        </div>
+      <main className="layout">
+        <section className="controls">
+          <form className="card" onSubmit={beginSession}>
+            <h2>Start a session</h2>
+            <label htmlFor="display-name">Your name</label>
+            <input
+              id="display-name"
+              type="text"
+              value={displayName}
+              onChange={(event) => setDisplayName(event.target.value)}
+              placeholder="Jane Doe"
+              maxLength={48}
+              disabled={sessionState !== 'idle'}
+              autoComplete="name"
+              required
+            />
+            <button type="submit" disabled={sessionState !== 'idle'}>
+              Start session
+            </button>
+          </form>
 
-        <div className="control-card status">
-          <h2>Status</h2>
-          <p>{status}</p>
-          {error && <p className="error">{error}</p>}
-          {roomCode && (
-            <>
-              <p className="role-indicator">You are the {isHost ? 'host' : 'guest'} of this room.</p>
-              <button type="button" onClick={handleLeaveRoom}>
-                Leave Room
+          <div className="card status">
+            <h2>Status</h2>
+            <p>{status}</p>
+            {error && <p className="error">{error}</p>}
+            {roomId && (
+              <p className="session-id">
+                Session ID: <code>{roomId}</code>
+              </p>
+            )}
+            {sessionState !== 'idle' && (
+              <button type="button" onClick={handleLeaveSession} className="leave">
+                End session
               </button>
-            </>
-          )}
-        </div>
-      </div>
+            )}
+          </div>
+        </section>
 
-      <div className="videos">
-        <div className="video-wrapper">
-          <h3>Your preview</h3>
-          <video ref={localVideoRef} autoPlay playsInline muted></video>
-        </div>
-        <div className="video-wrapper">
-          <h3>Remote participant</h3>
-          <video ref={remoteVideoRef} autoPlay playsInline></video>
-        </div>
-      </div>
+        <section className="videos">
+          <div className="video-card">
+            <h3>Your camera</h3>
+            <video ref={localVideoRef} autoPlay playsInline muted></video>
+          </div>
+          <div className="video-card">
+            <h3>Employee</h3>
+            <video ref={remoteVideoRef} autoPlay playsInline></video>
+          </div>
+        </section>
 
-      {connected && <div className="connected">You are now on a call.</div>}
+        {connected && <div className="call-indicator">You are connected to an employee.</div>}
+      </main>
     </div>
   );
 }

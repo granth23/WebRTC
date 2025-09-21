@@ -1,14 +1,20 @@
 {
   "name": "webrtc-react-room",
   "version": "1.0.0",
-  "description": "React-based WebRTC demo with manual signaling server.",
+  "description": "WebRTC signaling server with dedicated user and employee interfaces.",
   "main": "server.js",
   "scripts": {
     "start": "node server.js",
     "dev": "node server.js",
-    "build": "npm run build --prefix client",
-    "client:dev": "npm run dev --prefix client",
-    "client:install": "npm install --prefix client"
+    "build": "npm run user:build && npm run employee:build",
+    "user:install": "npm install --prefix user",
+    "employee:install": "npm install --prefix employee",
+    "user:dev": "npm run dev --prefix user",
+    "employee:dev": "npm run dev --prefix employee",
+    "user:build": "npm run build --prefix user",
+    "employee:build": "npm run build --prefix employee",
+    "user:start": "npm start --prefix user",
+    "employee:start": "npm start --prefix employee"
   },
   "keywords": [
     "webrtc",
