@@ -1,3 +1,5 @@
+@import url('https://fonts.googleapis.com/css2?family=Merriweather:wght@400;500;600;700&family=Public+Sans:wght@300;400;500;600;700&display=swap');
+
 :root {
   color-scheme: light;
   --background: #f4f5f7;
@@ -17,6 +19,8 @@
   --warning-soft: #fef3c7;
   --success: #1e5f43;
   --success-soft: #e3f2eb;
+  --font-body: 'Public Sans', 'Segoe UI', 'Helvetica Neue', Arial, sans-serif;
+  --font-heading: 'Merriweather', 'Georgia', 'Times New Roman', serif;
 }
 
 *,
@@ -28,10 +32,30 @@
 body {
   margin: 0;
   min-height: 100vh;
-  font-family: 'Source Sans 3', 'Segoe UI', system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
+  font-family: var(--font-body);
+  font-weight: 400;
   background: var(--background);
   color: var(--text-primary);
   -webkit-font-smoothing: antialiased;
+}
+
+body,
+button,
+input,
+textarea,
+select {
+  font-family: var(--font-body);
+}
+
+h1,
+h2,
+h3,
+h4,
+h5,
+h6 {
+  font-family: var(--font-heading);
+  font-weight: 600;
+  letter-spacing: -0.01em;
 }
 
 .page {
@@ -58,6 +82,7 @@ header h1 {
   font-weight: 600;
   letter-spacing: -0.01em;
   color: var(--text-primary);
+  font-family: var(--font-heading);
 }
 
 header p {
@@ -136,6 +161,8 @@ header p {
   font-size: 1rem;
   font-weight: 600;
   color: var(--text-primary);
+  font-family: var(--font-heading);
+  letter-spacing: -0.005em;
 }
 
 .step-description {
@@ -172,6 +199,7 @@ header p {
   font-weight: 600;
   letter-spacing: -0.01em;
   color: var(--text-primary);
+  font-family: var(--font-heading);
 }
 
 .card h3 {
@@ -179,6 +207,8 @@ header p {
   font-size: 1.05rem;
   font-weight: 600;
   color: var(--text-primary);
+  font-family: var(--font-heading);
+  letter-spacing: -0.005em;
 }
 
 .helper-text {
@@ -394,6 +424,8 @@ header p {
   font-size: 1rem;
   font-weight: 600;
   color: var(--text-primary);
+  font-family: var(--font-heading);
+  letter-spacing: -0.005em;
 }
 
 .document-list {

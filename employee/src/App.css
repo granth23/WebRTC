@@ -1,3 +1,5 @@
+@import url('https://fonts.googleapis.com/css2?family=Merriweather:wght@400;500;600;700&family=Public+Sans:wght@300;400;500;600;700&display=swap');
+
 :root {
   color-scheme: light;
   --background: #f4f5f7;
@@ -14,6 +16,8 @@
   --danger: #b42318;
   --danger-soft: #fceceb;
   --success: #1e5f43;
+  --font-body: 'Public Sans', 'Segoe UI', 'Helvetica Neue', Arial, sans-serif;
+  --font-heading: 'Merriweather', 'Georgia', 'Times New Roman', serif;
 }
 
 *,
@@ -25,10 +29,30 @@
 body {
   margin: 0;
   min-height: 100vh;
-  font-family: 'Source Sans 3', 'Segoe UI', system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
+  font-family: var(--font-body);
+  font-weight: 400;
   background: var(--background);
   color: var(--text-primary);
   -webkit-font-smoothing: antialiased;
+}
+
+body,
+button,
+input,
+textarea,
+select {
+  font-family: var(--font-body);
+}
+
+h1,
+h2,
+h3,
+h4,
+h5,
+h6 {
+  font-family: var(--font-heading);
+  font-weight: 600;
+  letter-spacing: -0.01em;
 }
 
 .page {
@@ -55,6 +79,7 @@ header h1 {
   font-weight: 600;
   letter-spacing: -0.01em;
   color: var(--text-primary);
+  font-family: var(--font-heading);
 }
 
 header p {
@@ -94,6 +119,7 @@ header p {
   font-weight: 600;
   letter-spacing: -0.01em;
   color: var(--text-primary);
+  font-family: var(--font-heading);
 }
 
 .queue ul {
@@ -141,12 +167,14 @@ header p {
   margin: 0;
   color: var(--text-muted);
   font-size: 0.95rem;
+  font-family: var(--font-body);
 }
 
 .queue .hint {
   margin: 1rem 0 0;
   font-size: 0.88rem;
   color: var(--text-muted);
+  font-family: var(--font-body);
 }
 
 .card.status p {
