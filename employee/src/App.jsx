@@ -3,6 +3,9 @@ import { useEffect, useRef, useState } from 'react';
 const INITIAL_STATUS = 'Connected employees will see customers waiting to be helped.';
 const DEFAULT_SIGNALING_PATH = import.meta.env.VITE_SIGNALING_PATH ?? '/ws';
 const LOCAL_SIGNALING_FALLBACK_PORTS = new Map([
+  [5173, 3000],
+  [5174, 3000],
+  [5175, 3000],
   [4173, 3000],
   [4174, 3000],
   [4000, 3000],
