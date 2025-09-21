@@ -501,6 +501,12 @@ function App() {
                     <span>{sessionDetails.dob}</span>
                   </div>
                 )}
+                {sessionDetails?.address && (
+                  <div>
+                    <span className="label">Address</span>
+                    <span className="address-value">{sessionDetails.address}</span>
+                  </div>
+                )}
               </div>
             ) : (
               <p className="empty">Select a customer from the queue to view their details.</p>

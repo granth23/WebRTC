@@ -560,6 +560,18 @@ function sanitizeSessionDetails(value) {
       details.dob = dob;
     }
   }
+  if (typeof value.address === 'string') {
+    const address = value.address
+      .replace(/\r\n/g, '\n')
+      .split('\n')
+      .map((line) => line.replace(/\s+/g, ' ').trim())
+      .filter(Boolean)
+      .join('\n')
+      .slice(0, 320);
+    if (address) {
+      details.address = address;
+    }
+  }
 
   return Object.keys(details).length > 0 ? details : null;
 }
