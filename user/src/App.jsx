@@ -1,9 +1,12 @@
 import { useEffect, useRef, useState } from 'react';
+import Tesseract from 'tesseract.js';
 
 const INITIAL_STATUS = 'Complete the application steps to begin your verification session.';
 const READY_STATUS = 'Review your details and start the verification call when you are ready.';
 const DEFAULT_SIGNALING_PATH = import.meta.env.VITE_SIGNALING_PATH ?? '/ws';
-const DEFAULT_PAN_EXTRACTION_URL = 'http://localhost:5000/api/pan/extract';
+const PAN_REGEX = /\b([A-Z]{5}[0-9]{4}[A-Z])\b/;
+const DOB_REGEX = /\b(\d{1,2}[./-]\d{1,2}[./-]\d{2,4})\b/;
+const INVALID_NAME_CHARS = /[^A-Z0-9\s./-]/g;
 
 const STEPS = [
   {
@@ -39,11 +42,6 @@ function resolveSignalingUrl() {
   const path = DEFAULT_SIGNALING_PATH.startsWith('/') ? DEFAULT_SIGNALING_PATH : `/${DEFAULT_SIGNALING_PATH}`;
   const protocol = window.location.protocol === 'https:' ? 'wss' : 'ws';
   return `${protocol}://${window.location.host}${path}`;
-}
-
-function resolvePanExtractionUrl() {
-  const explicit = (import.meta.env.VITE_PAN_EXTRACTION_URL || '').trim();
-  return explicit.length > 0 ? explicit : DEFAULT_PAN_EXTRACTION_URL;
 }
 
 function sanitizeDisplayName(value) {
@@ -103,6 +101,93 @@ function normalisePanDob(value) {
     }
   }
   return trimmed;
+}
+
+function normaliseExtractedPan(value) {
+  if (!value) {
+    return '';
+  }
+  const cleaned = sanitizePanNumber(value);
+  return isValidPanNumber(cleaned) ? cleaned : '';
+}
+
+function normalisePanName(value) {
+  if (!value) {
+    return '';
+  }
+  const cleaned = value
+    .toUpperCase()
+    .replace(INVALID_NAME_CHARS, ' ')
+    .split(/\s+/)
+    .filter(Boolean)
+    .join(' ');
+  return formatPanName(cleaned);
+}
+
+function findPan(joined, lines) {
+  const match = joined.match(PAN_REGEX);
+  if (match) {
+    return match[1];
+  }
+  for (const line of lines) {
+    const candidate = sanitizePanNumber(line);
+    if (isValidPanNumber(candidate)) {
+      return candidate;
+    }
+  }
+  return '';
+}
+
+function findByKeywords(lines, keywords) {
+  const upperKeywords = keywords.map((keyword) => keyword.toUpperCase());
+  for (let index = 0; index < lines.length; index += 1) {
+    const line = lines[index];
+    const upper = line.toUpperCase();
+    for (const keyword of upperKeywords) {
+      if (upper.includes(keyword)) {
+        const start = upper.indexOf(keyword) + keyword.length;
+        let after = line.slice(start).replace(/^[:\s-]+/, '');
+        if (!after && line.includes(':')) {
+          after = line.split(':', 2)[1]?.trim() ?? '';
+        }
+        if (after) {
+          return after;
+        }
+        if (index + 1 < lines.length) {
+          return lines[index + 1];
+        }
+      }
+    }
+  }
+  return '';
+}
+
+function findFirstMatch(pattern, text) {
+  const match = text.match(pattern);
+  return match ? match[1] : '';
+}
+
+function parsePanText(text) {
+  if (!text) {
+    return { panNumber: '', name: '', fatherName: '', dob: '' };
+  }
+  const lines = text
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .filter(Boolean);
+  const joined = lines.join(' ');
+
+  const panNumber = normaliseExtractedPan(findPan(joined, lines));
+  const name = normalisePanName(findByKeywords(lines, ['NAME']));
+  const fatherName = normalisePanName(
+    findByKeywords(lines, ["FATHER'S NAME", 'FATHERS NAME', 'FATHER NAME', 'FATHER'])
+  );
+  let dob = normalisePanDob(findByKeywords(lines, ['DOB', 'DATE OF BIRTH', 'BIRTH']));
+  if (!dob) {
+    dob = normalisePanDob(findFirstMatch(DOB_REGEX, joined));
+  }
+
+  return { panNumber, name, fatherName, dob };
 }
 
 function formatCurrency(value) {
@@ -657,58 +742,50 @@ function App() {
 
   async function extractPanDetails(file, jobId) {
     setPanExtraction({ status: 'loading', message: 'Extracting PAN details…' });
-    const formData = new FormData();
-    formData.append('pan_front', file);
 
     try {
-      const response = await fetch(resolvePanExtractionUrl(), {
-        method: 'POST',
-        body: formData
+      const result = await Tesseract.recognize(file, 'eng', {
+        logger: (info) => {
+          if (jobId !== panExtractionJobRef.current) {
+            return;
+          }
+          if (!info?.status) {
+            return;
+          }
+          const progress = info.progress ? Math.round(info.progress * 100) : 0;
+          let message = 'Extracting PAN details…';
+          if (info.status !== 'recognizing text') {
+            message = progress > 0 && progress < 100 ? `Preparing on-device OCR… ${progress}%` : 'Preparing on-device OCR…';
+          } else if (progress > 0 && progress < 100) {
+            message = `Extracting PAN details… ${progress}%`;
+          }
+          setPanExtraction({ status: 'loading', message });
+        }
       });
 
       if (jobId !== panExtractionJobRef.current) {
         return;
       }
 
-      if (!response.ok) {
-        const text = await response.text();
-        throw new Error(text || 'PAN extraction failed.');
-      }
-
-      let payload = {};
-      try {
-        payload = await response.json();
-      } catch (parseError) {
-        throw new Error('PAN extraction service returned an unexpected response.');
-      }
-
-      if (payload.status === 'error') {
-        throw new Error(payload.message || 'PAN extraction failed.');
-      }
-
-      const extractedPan = sanitizePanNumber(payload.panNumber || payload.pan_number || '');
-      const extractedName = formatPanName(payload.name || payload.panName || payload.pan_name || '');
-      const extractedFather = formatPanName(
-        payload.fatherName || payload.father_name || payload.father || ''
-      );
-      const extractedDob = normalisePanDob(payload.dob || '');
+      const text = result?.data?.text ?? '';
+      const parsed = parsePanText(text);
 
       if (jobId !== panExtractionJobRef.current) {
         return;
       }
 
       setPanDetails((prev) => ({
-        panNumber: extractedPan || prev.panNumber,
-        name: extractedName || prev.name,
-        fatherName: extractedFather || prev.fatherName,
-        dob: extractedDob || prev.dob
+        panNumber: parsed.panNumber || prev.panNumber,
+        name: parsed.name || prev.name,
+        fatherName: parsed.fatherName || prev.fatherName,
+        dob: parsed.dob || prev.dob
       }));
 
       if (jobId !== panExtractionJobRef.current) {
         return;
       }
 
-      const hasAutoFill = Boolean(extractedPan || extractedName || extractedFather || extractedDob);
+      const hasAutoFill = Boolean(parsed.panNumber || parsed.name || parsed.fatherName || parsed.dob);
 
       setPanExtraction({
         status: hasAutoFill ? 'success' : 'warning',
@@ -721,11 +798,11 @@ function App() {
         return;
       }
       console.error('PAN extraction failed', err);
-      setPanExtraction({
-        status: 'error',
-        message:
-          err instanceof Error ? err.message : 'Unable to contact the PAN extraction service.'
-      });
+      const message =
+        err instanceof Error && err.message
+          ? err.message
+          : 'On-device PAN extraction failed. Please fill in the details manually.';
+      setPanExtraction({ status: 'error', message });
     }
   }
 
