@@ -6,9 +6,9 @@
   "scripts": {
     "start": "node server.js",
     "dev": "node server.js",
-    "build": "npm run build --prefix client",
-    "client:dev": "npm run dev --prefix client",
-    "client:install": "npm install --prefix client"
+    "build": "npm --prefix client run build",
+    "client:dev": "npm --prefix client run dev",
+    "client:install": "npm install --prefix client --include=dev"
   },
   "keywords": [
     "webrtc",
