@@ -30,6 +30,9 @@ This repository hosts a production-ready React client and a lightweight Node.js 
    npm run client:install
    ```
 
+   The helper script runs `npm install --include=dev` inside the `client/` directory so that Vite and other development-only
+   dependencies are always present, even when `NODE_ENV=production` (as in Vercel build environments).
+
 2. **Run the signaling server**
 
    ```bash
