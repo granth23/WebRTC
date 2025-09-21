@@ -51,6 +51,19 @@ function sanitizeDisplayName(value) {
   return value.replace(/\s+/g, ' ').trim();
 }
 
+function sanitizeAddress(value) {
+  if (typeof value !== 'string') {
+    return '';
+  }
+  return value
+    .replace(/\r\n/g, '\n')
+    .split('\n')
+    .map((line) => line.replace(/\s+/g, ' ').trim())
+    .filter(Boolean)
+    .join('\n')
+    .slice(0, 240);
+}
+
 function sanitizePanNumber(value) {
   if (typeof value !== 'string') {
     return '';
@@ -627,11 +640,27 @@ function App() {
     finalizedRef.current = false;
     setupSocket((socket) => {
       const panNumber = sanitizePanNumber(panDetails.panNumber);
-      const details = {
-        panNumber,
-        panName: panDetails.name ? formatPanName(panDetails.name) : '',
-        dob: panDetails.dob ? normalisePanDob(panDetails.dob) : ''
-      };
+      const details = {};
+      if (panNumber) {
+        details.panNumber = panNumber;
+      }
+      const panName = panDetails.name ? formatPanName(panDetails.name) : '';
+      if (panName) {
+        details.panName = panName;
+      }
+      const panDob = panDetails.dob ? normalisePanDob(panDetails.dob) : '';
+      if (panDob) {
+        details.dob = panDob;
+      } else if (financialInfo.dob) {
+        const normalizedDob = normalisePanDob(financialInfo.dob);
+        if (normalizedDob) {
+          details.dob = normalizedDob;
+        }
+      }
+      const address = sanitizeAddress(customerInfo.address);
+      if (address) {
+        details.address = address;
+      }
       socket.send(
         JSON.stringify({
           type: 'register-user',

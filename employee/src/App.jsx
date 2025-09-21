@@ -501,6 +501,12 @@ function App() {
                     <span>{sessionDetails.dob}</span>
                   </div>
                 )}
+                {sessionDetails?.address && (
+                  <div>
+                    <span className="label">Address</span>
+                    <span className="address-value">{sessionDetails.address}</span>
+                  </div>
+                )}
               </div>
             ) : (
               <p className="empty">Select a customer from the queue to view their details.</p>
@@ -551,12 +557,11 @@ function App() {
             <h3>Customer</h3>
             <video ref={remoteVideoRef} autoPlay playsInline></video>
           </div>
+          {connected && (
+            <div className="call-indicator">You are assisting {selectedUser ? selectedUser.name : 'a customer'}.</div>
+          )}
         </section>
       </div>
-
-      {connected && (
-        <div className="call-indicator">You are assisting {selectedUser ? selectedUser.name : 'a customer'}.</div>
-      )}
     </div>
   );
 }
