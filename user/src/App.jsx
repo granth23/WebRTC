@@ -4,6 +4,29 @@ import Tesseract from 'tesseract.js';
 const INITIAL_STATUS = 'Complete the application steps to begin your verification session.';
 const READY_STATUS = 'Review your details and start the verification call when you are ready.';
 const DEFAULT_SIGNALING_PATH = import.meta.env.VITE_SIGNALING_PATH ?? '/ws';
+const LOCAL_SIGNALING_FALLBACK_PORTS = new Map([
+  [4173, 3000],
+  [4174, 3000],
+  [4000, 3000],
+  [4001, 3000]
+]);
+const LOCAL_HOSTS = new Set(['localhost', '127.0.0.1', '::1', '[::1]', '0.0.0.0']);
+
+function isLocalHostname(hostname) {
+  if (!hostname) {
+    return false;
+  }
+  if (LOCAL_HOSTS.has(hostname)) {
+    return true;
+  }
+  if (hostname.startsWith('127.')) {
+    return true;
+  }
+  if (hostname.startsWith('::ffff:127.')) {
+    return true;
+  }
+  return false;
+}
 const PAN_REGEX = /\b([A-Z]{5}[0-9]{4}[A-Z])\b/;
 const DOB_REGEX = /\b(\d{1,2}[./-]\d{1,2}[./-]\d{2,4})\b/;
 const INVALID_NAME_CHARS = /[^A-Z0-9\s./-]/g;
@@ -40,8 +63,22 @@ function resolveSignalingUrl() {
     return '';
   }
   const path = DEFAULT_SIGNALING_PATH.startsWith('/') ? DEFAULT_SIGNALING_PATH : `/${DEFAULT_SIGNALING_PATH}`;
-  const protocol = window.location.protocol === 'https:' ? 'wss' : 'ws';
-  return `${protocol}://${window.location.host}${path}`;
+  const pageProtocol = window.location.protocol;
+  const wsProtocol = pageProtocol === 'https:' ? 'wss' : 'ws';
+  const hostname = window.location.hostname;
+  const parsedPort = Number.parseInt(window.location.port, 10);
+  const defaultPort = pageProtocol === 'https:' ? 443 : 80;
+  const isLocalHost = isLocalHostname(hostname);
+  let targetPort = Number.isFinite(parsedPort) ? parsedPort : defaultPort;
+
+  if (isLocalHost && LOCAL_SIGNALING_FALLBACK_PORTS.has(targetPort)) {
+    targetPort = LOCAL_SIGNALING_FALLBACK_PORTS.get(targetPort);
+  }
+
+  const includePort = targetPort !== defaultPort && targetPort !== 0;
+  const portSegment = includePort ? `:${targetPort}` : '';
+
+  return `${wsProtocol}://${hostname}${portSegment}${path}`;
 }
 
 function sanitizeDisplayName(value) {
