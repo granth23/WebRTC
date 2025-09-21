@@ -557,12 +557,11 @@ function App() {
             <h3>Customer</h3>
             <video ref={remoteVideoRef} autoPlay playsInline></video>
           </div>
+          {connected && (
+            <div className="call-indicator">You are assisting {selectedUser ? selectedUser.name : 'a customer'}.</div>
+          )}
         </section>
       </div>
-
-      {connected && (
-        <div className="call-indicator">You are assisting {selectedUser ? selectedUser.name : 'a customer'}.</div>
-      )}
     </div>
   );
 }
