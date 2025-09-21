@@ -699,7 +699,10 @@ function App() {
 
     setPanDetails((prev) => ({
       ...prev,
-      panNumber: sanitisedPan
+      panNumber: sanitisedPan,
+      name: formatPanName(prev.name),
+      fatherName: formatPanName(prev.fatherName),
+      dob: prev.dob ? normalisePanDob(prev.dob) : ''
     }));
     setWizardError('');
     setStatus(READY_STATUS);
@@ -737,6 +740,30 @@ function App() {
     setPanDetails((prev) => ({
       ...prev,
       panNumber: sanitised
+    }));
+  }
+
+  function handlePanNameChange(event) {
+    const { value } = event.target;
+    setPanDetails((prev) => ({
+      ...prev,
+      name: value
+    }));
+  }
+
+  function handlePanFatherNameChange(event) {
+    const { value } = event.target;
+    setPanDetails((prev) => ({
+      ...prev,
+      fatherName: value
+    }));
+  }
+
+  function handlePanDobChange(event) {
+    const { value } = event.target;
+    setPanDetails((prev) => ({
+      ...prev,
+      dob: value
     }));
   }
 
@@ -977,21 +1004,43 @@ function App() {
                     ? 'Upload a crisp scan to auto-fill the information below.'
                     : panExtraction.message}
                 </p>
+                <p className="pan-edit-note">Update any field so it matches your PAN card exactly.</p>
               </div>
-              <dl className="pan-details-grid">
-                <div>
-                  <dt>Name on card</dt>
-                  <dd>{panDetails.name || '—'}</dd>
+              <div className="pan-fields-grid">
+                <div className="pan-field">
+                  <label htmlFor="pan-name">Name on card</label>
+                  <input
+                    id="pan-name"
+                    type="text"
+                    value={panDetails.name}
+                    onChange={handlePanNameChange}
+                    placeholder="Enter the name as printed"
+                    maxLength={64}
+                  />
                 </div>
-                <div>
-                  <dt>Father&apos;s name</dt>
-                  <dd>{panDetails.fatherName || '—'}</dd>
+                <div className="pan-field">
+                  <label htmlFor="pan-father-name">Father&apos;s name</label>
+                  <input
+                    id="pan-father-name"
+                    type="text"
+                    value={panDetails.fatherName}
+                    onChange={handlePanFatherNameChange}
+                    placeholder="Enter the father&apos;s name"
+                    maxLength={64}
+                  />
                 </div>
-                <div>
-                  <dt>Date of birth</dt>
-                  <dd>{panDetails.dob ? formatDate(panDetails.dob) : '—'}</dd>
+                <div className="pan-field">
+                  <label htmlFor="pan-dob">Date of birth</label>
+                  <input
+                    id="pan-dob"
+                    type="text"
+                    value={panDetails.dob}
+                    onChange={handlePanDobChange}
+                    placeholder="DD/MM/YYYY"
+                    maxLength={32}
+                  />
                 </div>
-              </dl>
+              </div>
             </section>
 
             <div className="form-actions">

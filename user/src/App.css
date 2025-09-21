@@ -393,6 +393,29 @@ header p {
   color: rgba(148, 163, 184, 0.85);
 }
 
+.pan-edit-note {
+  margin: 0;
+  font-size: 0.85rem;
+  color: rgba(148, 163, 184, 0.75);
+}
+
+.pan-fields-grid {
+  display: grid;
+  gap: 1rem;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+}
+
+.pan-field {
+  display: flex;
+  flex-direction: column;
+  gap: 0.45rem;
+}
+
+.pan-field input {
+  font-weight: 500;
+  letter-spacing: 0.01em;
+}
+
 .pan-status.loading {
   color: #fcd34d;
 }
@@ -411,27 +434,6 @@ header p {
 
 .pan-status.idle {
   color: rgba(148, 163, 184, 0.75);
-}
-
-.pan-details-grid {
-  margin: 0;
-  display: grid;
-  gap: 1rem;
-  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
-}
-
-.pan-details-grid dt {
-  font-size: 0.75rem;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-  color: rgba(148, 163, 184, 0.75);
-}
-
-.pan-details-grid dd {
-  margin: 0;
-  font-size: 0.95rem;
-  font-weight: 500;
-  color: #f8fafc;
 }
 
 .document-note {
