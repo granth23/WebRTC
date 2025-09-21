@@ -1,145 +1,118 @@
-# React WebRTC Rooms
+# WebRTC Support Sessions
 
-This repository hosts a production-ready React client and a lightweight Node.js signaling server that together deliver a two-party WebRTC calling experience. One participant can generate a room code, share it, and the peer joins with the code to establish a peer-to-peer video call.
+This project demonstrates a lightweight WebRTC workflow tailored for a support scenario. Customers open the **user** site, enter their name, and wait in a queue. Employees open the **employee** site, see everyone waiting, and connect to an individual customer. A standalone Node.js server (`server.js`) coordinates signaling between peers over a raw WebSocket implementation.
 
 ## Project structure
 
 ```
-├── client/               # React application bootstrapped with Vite
+├── employee/             # Employee-facing Vite + React application
 │   ├── index.html
 │   ├── package.json
+│   ├── server.js         # Static file server for production builds (port 4001)
 │   └── src/
-│       ├── App.jsx
-│       ├── App.css
-│       └── main.jsx
+├── user/                 # Customer-facing Vite + React application
+│   ├── index.html
+│   ├── package.json
+│   ├── server.js         # Static file server for production builds (port 4000)
+│   └── src/
 ├── server.js             # HTTP + WebSocket signaling server (no external deps)
-├── package.json          # Server-side scripts and helpers
+├── package.json          # Root scripts to manage all services
 └── .gitignore
 ```
 
 ## Requirements
 
 - Node.js 18 or newer
-- Modern browser with camera & microphone permissions granted
+- Modern browser with camera & microphone permissions granted (the customer UI performs OCR in-browser via `tesseract.js`)
 
 ## Local development
 
-1. **Install client dependencies**
+1. **Install UI dependencies**
 
    ```bash
-   npm run client:install
+   npm run user:install
+   npm run employee:install
    ```
 
-2. **Run the signaling server**
+   The signaling server itself uses only Node.js built-ins, so no additional install step is required at the root.
+
+2. **Start the signaling server**
 
    ```bash
    npm start
    ```
 
-   The server listens on [http://localhost:3000](http://localhost:3000) and exposes a `/ws` WebSocket endpoint for signaling.
+   The server listens on [http://localhost:3000](http://localhost:3000) and exposes a `/ws` WebSocket endpoint.
 
-3. **In a second terminal, start the Vite dev server**
+3. **Launch the customer UI**
 
    ```bash
-   cd client
-   npm run dev
+   npm run user:dev
    ```
 
-   The React dev server runs on [http://localhost:5173](http://localhost:5173). API/WebSocket calls to `/ws` are proxied to the Node server, so both tabs can be opened locally for testing.
+   The Vite dev server runs on [http://localhost:4173](http://localhost:4173) and proxies `/ws` traffic to the signaling server.
+
+4. **Launch the employee UI**
+
+   ```bash
+   npm run employee:dev
+   ```
+
+   This dev server runs on [http://localhost:4174](http://localhost:4174) and proxies signaling requests the same way.
+
+With all three processes running, open the user site in one browser tab, enter a name, and press **Start session**. The name instantly appears in the employee queue. When an employee selects a customer, the signaling server notifies both parties and the WebRTC session begins. Uploading a PAN card image will trigger on-device OCR to populate the verification fields automatically.
 
 ## Building for production
 
-Generate the optimized React bundle and serve it from the Node server:
+The root `build` script compiles both front-ends:
 
 ```bash
 npm run build
-npm start
 ```
 
-The first command compiles the React client into `client/dist/`. When `npm start` runs afterwards, static assets are served directly from that folder. If the server does not find a build it returns a helper page explaining how to create one.
-
-### Environment variables
-
-| Variable | Default | Purpose |
-| --- | --- | --- |
-| `PORT` | `3000` | Port for the Node.js server. |
-| `VITE_SIGNALING_URL` | Derived from window location | Allows the React client (during build/dev) to connect to a remote WebSocket signaling endpoint such as a hosted instance. |
-| `VITE_SIGNALING_PATH` | `/ws` | Overrides the WebSocket path segment when the URL is inferred from the browser location. |
-| `VITE_SIGNALING_PROXY` | `http://localhost:3000` | Used only in development. Vite proxies `/ws` traffic to this origin. |
-
-For example, when the backend runs on a different host you can build the client with:
+Afterwards each UI can be served by its dedicated Node.js server:
 
 ```bash
-cd client
-VITE_SIGNALING_URL=wss://your-domain.example/ws npm run build
+npm run user:start      # Serves user/dist on port 4000 (override with PORT)
+npm run employee:start  # Serves employee/dist on port 4001
+npm start               # Runs the signaling server on port 3000
 ```
 
-## Deployment on DigitalOcean
+You can place these behind a reverse proxy or host them separately depending on your deployment needs. Each UI only needs access to the signaling server’s WebSocket endpoint. The customer UI bundles `tesseract.js`, so no additional backend service is required for OCR.
 
-Below is a tested flow for hosting the project on a DigitalOcean Droplet using Ubuntu:
+## Environment variables
 
-1. **Create a Droplet**
-   - Choose the latest Ubuntu LTS image.
-   - Select a plan (the $6/month Basic droplet is sufficient for testing).
-   - Add your SSH key and create the droplet.
+| Variable | Default | Scope | Purpose |
+| --- | --- | --- | --- |
+| `PORT` | `3000` | Root `server.js` | Port for the WebSocket signaling server. |
+| `VITE_SIGNALING_URL` | Derived from browser location | User + Employee apps | Override the full WebSocket URL when building for a remote signaling host. |
+| `VITE_SIGNALING_PATH` | `/ws` | User + Employee apps | Customize the path segment appended to the inferred signaling URL. |
+| `VITE_SIGNALING_PROXY` | `http://localhost:3000` | User + Employee dev servers | Proxy target for `/ws` traffic during development. |
 
-2. **Harden the droplet**
-   - SSH in: `ssh root@your-droplet-ip`
-   - Update the OS: `apt update && apt upgrade -y`
-   - Install the UFW firewall, allow SSH (already open), HTTP, and HTTPS:
-     ```bash
-     ufw allow OpenSSH
-     ufw allow 80
-     ufw allow 443
-     ufw enable
-     ```
+Each Vite app respects the same environment variables, so you can point both interfaces at a hosted signaling server when building for production:
 
-3. **Install runtime dependencies**
-   ```bash
-   apt install -y curl build-essential
-   curl -fsSL https://deb.nodesource.com/setup_20.x | bash -
-   apt install -y nodejs git
-   ```
+```bash
+cd user
+VITE_SIGNALING_URL=wss://signaling.example/ws npm run build
+cd ../employee
+VITE_SIGNALING_URL=wss://signaling.example/ws npm run build
+```
 
-4. **Clone and configure the project**
-   ```bash
-   git clone https://github.com/<your-account>/WebRTC.git
-   cd WebRTC
-   npm run client:install
-   npm run build
-   ```
-   If the signaling server will live on a different hostname or behind TLS termination, set `VITE_SIGNALING_URL` before `npm run build`.
+## How it works
 
-5. **Run the signaling server under a process manager**
-   - Install PM2 (or another supervisor):
-     ```bash
-     npm install -g pm2
-     ```
-   - Start the server and persist it across reboots:
-     ```bash
-     pm2 start server.js --name webrtc-server
-     pm2 save
-     pm2 startup systemd
-     ```
+- **User flow:** a customer provides their display name, the server registers a dedicated room, and the name is broadcast to all connected employees. The user waits for an employee to join.
+- **Employee flow:** the employee UI maintains a live list of waiting customers. Selecting one sends a `join` request, the signaling server pairs the two participants, and standard WebRTC offer/answer negotiation begins.
+- **Session lifecycle:** if an employee leaves, the user automatically re-enters the queue. When the user leaves, the associated room is torn down.
+- **PAN extraction:** when the customer uploads the front of their PAN card, the UI runs on-device OCR with `tesseract.js` to auto-fill the PAN number, name, father's name, and date of birth.
 
-6. **(Optional) Add a reverse proxy and TLS**
-   - Install Nginx: `apt install -y nginx`
-   - Configure a server block that proxies HTTP and WebSocket requests to `http://127.0.0.1:3000`.
-   - Use [Certbot](https://certbot.eff.org/) to obtain a free TLS certificate:
-     ```bash
-     apt install -y certbot python3-certbot-nginx
-     certbot --nginx -d your-domain.example
-     ```
+## Deployment notes
 
-7. **Verify**
-   - Visit your domain (or droplet IP) in two different browsers or devices.
-   - Create a room from one instance, join with the code from the other, and confirm video and audio streams flow.
+1. Provision your infrastructure (e.g., a VM or container host) and install Node.js 18+.
+2. Clone this repository and build both UIs with `npm run build`.
+3. Run the three services under a process manager of your choice (PM2, systemd, Docker, etc.).
+4. Optionally place the three HTTP endpoints behind a reverse proxy or consolidate them behind a single domain with separate subpaths/ports.
 
-## Troubleshooting tips
-
-- If the page shows “Client build not found”, ensure you executed `npm run build` after installing client dependencies.
-- When hosting the client separately from the signaling server, double-check the `VITE_SIGNALING_URL` that the client was built with and confirm the WebSocket endpoint is reachable (port open, TLS certificate valid, etc.).
-- WebRTC requires direct media connectivity. If peers cannot connect behind restrictive NATs, consider configuring a TURN server such as [coturn](https://github.com/coturn/coturn) and add it to the `iceServers` array in `client/src/App.jsx` and on the server if you introduce authentication.
+Because the signaling server does not serve the UI directly, you are free to host the user and employee apps wherever you prefer, as long as they can reach the WebSocket endpoint.
 
 ## License
 
