@@ -1260,22 +1260,6 @@ function App() {
                     </button>
                   </div>
                 </div>
-
-                <div className="card status">
-                  <h2>Status</h2>
-                  <p>{status}</p>
-                  {error && <p className="error">{error}</p>}
-                  {roomId && (
-                    <p className="session-id">
-                      Session ID: <code>{roomId}</code>
-                    </p>
-                  )}
-                  {sessionState !== 'idle' && (
-                    <button type="button" onClick={handleLeaveSession} className="leave">
-                      End session
-                    </button>
-                  )}
-                </div>
               </section>
 
               <section className="videos">
@@ -1290,9 +1274,9 @@ function App() {
                   <h3>Loan officer</h3>
                   <video ref={remoteVideoRef} autoPlay playsInline></video>
                 </div>
+                {connected && !completed && <div className="call-indicator">You are connected to a loan officer.</div>}
               </section>
             </div>
-            {connected && !completed && <div className="call-indicator">You are connected to a loan officer.</div>}
           </>
         );
       default:
@@ -1315,10 +1299,10 @@ function App() {
           const state = completed
             ? 'complete'
             : currentStep === step.id
-            ? 'active'
-            : currentStep > step.id
-            ? 'complete'
-            : 'upcoming';
+              ? 'active'
+              : currentStep > step.id
+                ? 'complete'
+                : 'upcoming';
           return (
             <li key={step.id} className={`step ${state}`}>
               <span className="step-index" aria-hidden="true">
