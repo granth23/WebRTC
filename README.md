@@ -19,7 +19,7 @@ This repository hosts a production-ready React client and a lightweight Node.js 
 
 ## Requirements
 
-- Node.js 18 or newer
+- Node.js 20.x (LTS). Vercel and the deployment steps below pin to Node 20 so Rollup installs the correct native binary during `vite build`.
 - Modern browser with camera & microphone permissions granted
 
 ## Local development
